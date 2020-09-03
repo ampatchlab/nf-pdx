@@ -1,0 +1,38 @@
+title: "ampatchlab/nf-pdx"
+subtitle: "Patient-derived xenograft Nextflow pipeline"
+intro_text: False
+
+report_header_info:
+    - Contact E-mail: 'stephen.kazakoff@qimrberghofer.edu.au'
+    - Application Type: 'Patient-derived xenograft Nextflow pipeline'
+
+module_order:
+    - fastqc:
+        name: 'FastQC (raw)'
+        anchor: 'fastqc-raw'
+        target: 'FastQC'
+        path_filters_exclude:
+            - '*.trimmed_fastqc.zip'
+    - cutadapt
+    - fastqc:
+        name: 'FastQC (trimmed)'
+        anchor: 'fastqc-trimmed'
+        target: 'FastQC'
+        path_filters:
+            - '*.trimmed_fastqc.zip'
+    - picard
+    - samtools
+
+extra_fn_clean_exts:
+    - type: 'truncate'
+      pattern: '.markdup'
+      module:
+        - Samtools
+
+run_modules:
+    - fastqc
+    - cutadapt
+    - picard
+
+exclude_modules:
+    - custom_content

@@ -1,0 +1,33 @@
+version: 0.2
+
+env:
+  variables:
+    bucket: "s3://ampatchlab/CodeBuild/nf-pdx"
+  parameter-store:
+    AWS_ACCESS_KEY_ID: "/CodeBuild/AWS_ACCESS_KEY_ID"
+    AWS_SECRET_ACCESS_KEY: "/CodeBuild/AWS_SECRET_ACCESS_KEY"
+    AWS_DEFAULT_REGION: "/CodeBuild/AWS_DEFAULT_REGION"
+
+phases:
+  install:
+    runtime-versions:
+      java: openjdk11
+    commands:
+      - apt-get update -y
+      - apt-get install -y graphviz
+  build:
+    commands:
+      - export CAPSULE_LOG=none
+      - curl -fsSL get.nextflow.io | bash
+      - |
+        ./nextflow -Dhttps.protocols=TLSv1,TLSv1.1,TLSv1.2 run . \
+          -ansi-log false \
+          -profile awsbatch,ci \
+          -work-dir "$bucket/$CODEBUILD_BUILD_ID/work" \
+          --publish_dir "$bucket/$CODEBUILD_BUILD_ID/results" \
+          --aws_region "$AWS_DEFAULT_REGION" \
+          --aws_queue "nf-pdx"
+  post_build:
+    commands:
+      - aws s3 sync --quiet ./reports "$bucket/$CODEBUILD_BUILD_ID/reports"
+      - aws s3 cp --quiet .nextflow.log "$bucket/$CODEBUILD_BUILD_ID/nextflow.log"
