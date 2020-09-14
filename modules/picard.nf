@@ -31,6 +31,8 @@ params.publish_mode = 'copy'
 
 params.publish_mark_duplicates = false
 
+params.max_file_handles = 1000
+
 
 /*
  * Processes
@@ -64,6 +66,7 @@ process mark_duplicates {
 
     """
     picard \\
+        -Djava.io.tmpdir="\${PWD}/tmp" \\
         -Dpicard.useLegacyParser=false \\
         -XX:+UseSerialGC \\
         ${Xms} \\
@@ -71,6 +74,7 @@ process mark_duplicates {
     MarkDuplicates \\
         -INPUT "${bam}" \\
         -OUTPUT "${bam.baseName}.markdup.bam" \\
+        -MAX_FILE_HANDLES "${params.max_file_handles}" \\
         -METRICS_FILE "${bam.baseName}.metrics.txt" \\
         -ASSUME_SORT_ORDER coordinate \\
         -CREATE_INDEX TRUE \\
