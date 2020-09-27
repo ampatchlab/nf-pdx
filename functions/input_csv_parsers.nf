@@ -2,7 +2,7 @@
 vim: syntax=groovy
 -*- mode: groovy;-*-
  *
- * ampatchlab/nf-typeHLA: HLA typing Nextflow pipeline
+ * ampatchlab/nf-pdx: Patient-derived xenograft Nextflow pipeline
  *
  * Copyright (C) 2020 QIMR Berghofer Medical Research Institute
  *
