@@ -86,6 +86,7 @@ process cutadapt {
     """
     cutadapt \\
         -j "${task.cpus}" \\
+        -Z \\
         ${r1_adapters} \\
         ${r2_adapters} \\
         ${min_read_length} \\
