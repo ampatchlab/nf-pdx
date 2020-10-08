@@ -38,7 +38,7 @@ check_params()
  * Modules
  */
 
-include { parse_input_csv } from './functions/input_csv_parsers.nf' params( params )
+include { parse_readgroup_csv } from './functions/input_csv_parsers.nf' params( params )
 include { germline_pdx } from './workflows/germline_pdx.nf' params( params )
 
 
@@ -75,7 +75,7 @@ params.mouse_vep_cache = params.mouse_genome_assembly in params.genome_assemblie
 
 workflow {
 
-    input_readgroups = parse_input_csv( params.csv )
+    input_readgroups = parse_readgroup_csv( params.readgroup_csv )
 
     adapters = [ params.r1_adapter_file, params.r2_adapter_file ]
 
@@ -165,7 +165,7 @@ def usage() {
 
     Required params:
 
-        --csv FILE
+        --readgroup_csv FILE
             Comma-separated list of sample and readgroup inputs
 
 

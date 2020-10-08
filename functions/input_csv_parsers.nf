@@ -23,7 +23,7 @@ vim: syntax=groovy
 import nextflow.splitter.CsvSplitter
 
 
-def parse_input_csv( csv ) {
+def parse_readgroup_csv( csv ) {
 
     def splitter = new CsvSplitter().options( header:true )
     def reader = new BufferedReader( new FileReader( csv ) )
