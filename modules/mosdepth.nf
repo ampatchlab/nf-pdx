@@ -29,71 +29,44 @@ params.publish_dir = './results'
 params.publish_everything = false
 params.publish_mode = 'copy'
 
-params.publish_bwa_index = false
-params.publish_bwa_mem = false
+params.publish_mosdepth = false
 
 
 /*
  * Processes
  */
 
-process bwa_index {
+process mosdepth {
 
-    tag { fasta }
+    tag { indexed_bam.first().name }
 
-    label 'bwakit'
+    label 'mosdepth'
 
     publishDir(
         path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
-        enabled: params.publish_everything || params.publish_bwa_index,
+        enabled: params.publish_everything || params.publish_mosdepth,
         mode: params.publish_mode,
     )
 
     input:
-    path fasta
+    path indexed_bam
+    path bed
 
     output:
-    path "${fasta}.{amb,ann,bwt,pac,sa}"
-
-    """
-    bwa index "${fasta}"
-    """
-}
-
-process bwa_mem {
-
-    tag { sample == readgroup ? sample : "${sample}:${readgroup}" }
-
-    label 'bwakit'
-
-    publishDir(
-        path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
-        enabled: params.publish_everything || params.publish_bwa_mem,
-        mode: params.publish_mode,
-    )
-
-    input:
-    tuple val(sample), val(readgroup), path(reads)
-    path bwa_index
-
-    output:
-    tuple val(sample), path("${readgroup}.aln.bam")
+    path "${indexed_bam.first().baseName}.mosdepth.{global,region}.dist.txt", emit: dists
+    path "${indexed_bam.first().baseName}.mosdepth.summary.txt", emit: summary
+    path "${indexed_bam.first().baseName}.regions.bed.gz{,.csi}", emit: regions_bed
 
     script:
-    def task_cpus = task.cpus > 1 ? task.cpus - 1 : task.cpus
-
-    def idxbase = bwa_index.first().baseName
-    def fastq_files = reads.collect { /"$it"/ }.join(' ')
+    def bam = indexed_bam.first()
+    def by = bed.name != 'null' ? /-b "${bed}"/ : ''
 
     """
-    bwa mem \\
-        -t ${task_cpus} \\
-        -R '@RG\\tID:${readgroup}\\tSM:${sample}' \\
-        "${idxbase}" \\
-        ${fastq_files} |
-    samtools view \\
-        -1 \\
-        -o "${readgroup}.aln.bam" \\
-        -
+    mosdepth \\
+        -t "${task.cpus - 1}" \\
+        ${by} \\
+        -n \\
+        "${bam.baseName}" \\
+        "${bam}"
     """
 }

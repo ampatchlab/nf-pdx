@@ -29,36 +29,36 @@ params.publish_dir = './results'
 params.publish_everything = false
 params.publish_mode = 'copy'
 
-params.publish_multiqc = false
+params.publish_bedops_convert2bed = false
 
 
 /*
  * Processes
  */
 
-process multiqc {
+process bedops_convert2bed {
 
-    label 'multiqc'
+    tag { sample }
+
+    label 'bedops'
 
     publishDir(
         path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
-        enabled: params.publish_everything || params.publish_multiqc,
+        enabled: params.publish_everything || params.publish_bedops_convert2bed,
         mode: params.publish_mode,
     )
 
     input:
-    path 'data/*'
-    path 'human/*'
-    path 'mouse/*'
-    path config
+    tuple val(sample), path(indexed_vcf)
 
     output:
-    path "multiqc_report.html", emit: report
-    path "multiqc_data", emit: data
+    path "${sample}.bed.gz"
 
     """
-    multiqc \\
-        --config "${config}" \\
-        .
+    zcat "${indexed_vcf.first()}" |
+        convert2bed -i vcf -d - |
+        cut -f -3 |
+        gzip \\
+        > "${sample}.bed.gz"
     """
 }

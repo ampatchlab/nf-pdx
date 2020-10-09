@@ -23,7 +23,7 @@ vim: syntax=groovy
  */
 
 
-nextflow.preview.dsl=2
+nextflow.enable.dsl=2
 
 import nextflow.config.ConfigParser
 
@@ -35,11 +35,43 @@ check_params()
 
 
 /*
- * Modules
+ * Imports
  */
 
+// functions
 include { parse_readgroup_csv } from './functions/input_csv_parsers.nf' params( params )
-include { germline_pdx } from './workflows/germline_pdx.nf' params( params )
+include { parse_somatic_csv } from './functions/input_csv_parsers.nf' params( params )
+include { parse_germline_csv } from './functions/input_csv_parsers.nf' params( params )
+
+// modules
+include { concat_ref_genomes } from './modules/biopython.nf' params( params )
+include { bwa_index } from './modules/bwakit.nf' params( params )
+include { multiqc } from './modules/multiqc.nf' params( params )
+include { samtools_faidx } from './modules/samtools.nf' params( params )
+
+include { mosdepth as mosdepth_human } from './modules/mosdepth.nf' params( params )
+include { mosdepth as mosdepth_mouse } from './modules/mosdepth.nf' params( params )
+
+include { qualimap as qualimap_human } from './modules/qualimap.nf' params( params )
+include { qualimap as qualimap_mouse } from './modules/qualimap.nf' params( params )
+
+include { bcftools_subset_regions as subset_human_germline_variants } from './modules/bcftools.nf' params( params )
+include { bcftools_subset_regions as subset_human_somatic_variants } from './modules/bcftools.nf' params( params )
+include { bcftools_subset_regions as subset_mouse_germline_variants } from './modules/bcftools.nf' params( params )
+include { bcftools_subset_regions as subset_mouse_somatic_variants } from './modules/bcftools.nf' params( params )
+
+include { extract as unpack_human_vep_cache } from './modules/tar.nf' params( params )
+include { extract as unpack_mouse_vep_cache } from './modules/tar.nf' params( params )
+
+// workflows
+include { dna_alignment } from './workflows/alignment.nf' params( params )
+include { germline_variant_calling } from './workflows/variant_calling.nf' params( params )
+include { somatic_variant_calling } from './workflows/variant_calling.nf' params( params )
+
+include { ensembl_vep as human_germline_annotation } from './workflows/annotation.nf' params( params )
+include { ensembl_vep as human_somatic_annotation } from './workflows/annotation.nf' params( params )
+include { ensembl_vep as mouse_germline_annotation } from './workflows/annotation.nf' params( params )
+include { ensembl_vep as mouse_somatic_annotation } from './workflows/annotation.nf' params( params )
 
 
 /*
@@ -68,46 +100,233 @@ params.mouse_vep_cache = params.mouse_genome_assembly in params.genome_assemblie
     ? params.genome_assemblies[ params.mouse_genome_assembly ].vep_cache
     : null
 
+// Manta and Strelka call regions
+params.call_regions = "${baseDir}/assets/null"
+
+params.manta_call_regions = params.call_regions
+params.strelka_call_regions = params.call_regions
+
 
 /*
- * Workflows
+ * Workflow
  */
 
 workflow {
 
-    input_readgroups = parse_readgroup_csv( params.readgroup_csv )
+    readgroup_inputs = parse_readgroup_csv( params.readgroup_csv )
 
-    adapters = [ params.r1_adapter_file, params.r2_adapter_file ]
+    cutadapt_adapter_files = [ params.r1_adapter_file, params.r2_adapter_file ]
 
-    human_params = [
-        params.human_genome_assembly,
+    human_ref_inputs = [
+        params.human_genome_assembly.replaceAll( /\./, '_' ),
         params.human_ref_fasta,
-        params.human_vep_cache,
     ]
-
-    mouse_params = [
-        params.mouse_genome_assembly,
+    mouse_ref_inputs = [
+        params.mouse_genome_assembly.replaceAll( /\./, '_' ),
         params.mouse_ref_fasta,
-        params.mouse_vep_cache,
     ]
 
-    workflow_inputs = [
-        input_readgroups,
-        adapters,
-        *human_params,
-        *mouse_params,
-        params.multiqc_config,
-    ]
 
-    if( params.sample_pairs ) {
+    // STEP 1 - Create the combined human and mouse reference genome
+    concat_ref_genomes( human_ref_inputs, mouse_ref_inputs )
 
-        false
+    combined_ref_fasta = concat_ref_genomes.out.fasta
+
+    human_regions_bed = concat_ref_genomes.out.human_regions_bed
+    human_chrom_synonyms = concat_ref_genomes.out.human_chrom_synonyms
+
+    mouse_regions_bed = concat_ref_genomes.out.mouse_regions_bed
+    mouse_chrom_synonyms = concat_ref_genomes.out.mouse_chrom_synonyms
+
+
+    // STEP 2 - Index the combined human and mouse reference genome
+    samtools_faidx( combined_ref_fasta )
+    bwa_index( combined_ref_fasta )
+
+    indexed_ref_fasta = combined_ref_fasta \
+        | concat( samtools_faidx.out ) \
+        | collect
+
+
+    // STEP 3 - Perform adapter trimming and alignment to the reference
+    dna_alignment(
+        readgroup_inputs,
+        bwa_index.out,
+        cutadapt_adapter_files,
+    )
+
+
+    // STEP 4 - Run Mosdepth
+    mosdepth_inputs = ! params.skip_mosdepth \
+        ? dna_alignment.out.alignments.map { sample, indexed_bam -> indexed_bam } \
+        : Channel.empty()
+
+    mosdepth_human( mosdepth_inputs, params.human_mosdepth_bed_file ?: human_regions_bed )
+    mosdepth_mouse( mosdepth_inputs, params.mouse_mosdepth_bed_file ?: mouse_regions_bed )
+
+
+    // STEP 5 - Run QualiMap
+    qualimap_inputs = ! params.skip_qualimap
+        ? dna_alignment.out.alignments.map { sample, indexed_bam -> indexed_bam.first() }
+        : Channel.empty()
+
+    qualimap_human( qualimap_inputs, params.human_qualimap_feature_file ?: human_regions_bed )
+    qualimap_mouse( qualimap_inputs, params.mouse_qualimap_feature_file ?: mouse_regions_bed )
+
+
+    // STEP 6 - Extract the indexed Ensembl VEP cache files
+    human_vep_cache = ( params.germline_csv || params.somatic_csv )
+        ? unpack_human_vep_cache( params.human_vep_cache )
+        : Channel.empty()
+
+    mouse_vep_cache = ( params.germline_csv || params.somatic_csv )
+        ? unpack_mouse_vep_cache( params.mouse_vep_cache )
+        : Channel.empty()
+
+
+    // STEP 7 - Call and annotate germline variants
+    if( params.germline_csv ) {
+
+        parse_germline_csv( params.germline_csv ) \
+            | map { analysis, samples ->
+                tuple( groupKey(analysis, samples.size()), samples )
+            } \
+            | transpose() \
+            | map { analysis, sample -> tuple( sample, analysis ) } \
+            | combine( dna_alignment.out.alignments, by: 0 ) \
+            | map { sample, analysis, indexed_bam -> tuple( analysis, indexed_bam ) } \
+            | groupTuple() \
+            | map { analysis, indexed_bam_files ->
+                tuple( analysis.toString(), indexed_bam_files.flatten() )
+            } \
+            | set { germline_inputs }
+
+        germline_variant_calling(
+            germline_inputs,
+            indexed_ref_fasta,
+            params.strelka_call_regions,
+        )
+
+        // human
+
+        subset_human_germline_variants(
+            germline_variant_calling.out,
+            human_regions_bed,
+        )
+
+        human_germline_annotation(
+            subset_human_germline_variants.out,
+            indexed_ref_fasta,
+            human_vep_cache,
+            human_chrom_synonyms,
+            'homo_sapiens',
+        )
+
+        // mouse
+
+        subset_mouse_germline_variants(
+            germline_variant_calling.out,
+            mouse_regions_bed,
+        )
+
+        mouse_germline_annotation(
+            subset_mouse_germline_variants.out,
+            indexed_ref_fasta,
+            mouse_vep_cache,
+            mouse_chrom_synonyms,
+            'mus_musculus',
+        )
     }
-    else {
 
-        germline_pdx( *workflow_inputs )
+
+    // STEP 8 - Call and annotate somatic variants
+    if( params.somatic_csv ) {
+
+        test_control_inputs = parse_somatic_csv( params.somatic_csv )
+
+        test_control_inputs \
+            | map { analysis, test, control ->
+                tuple( test, tuple( analysis, test, control ) )
+            } \
+            | combine( dna_alignment.out.alignments, by: 0 ) \
+            | map { sample, key_tuple, indexed_bam -> tuple( *key_tuple, indexed_bam ) } \
+            | set { test_inputs }
+
+        test_control_inputs \
+            | map { analysis, test, control ->
+                tuple( control, tuple( analysis, test, control ) )
+            } \
+            | combine( dna_alignment.out.alignments, by: 0 ) \
+            | map { sample, key_tuple, indexed_bam -> tuple( *key_tuple, indexed_bam ) } \
+            | set { control_inputs }
+
+        test_control_inputs \
+            | join( test_inputs, by: [0,1,2] ) \
+            | join( control_inputs, by: [0,1,2] ) \
+            | map { analysis, test, control, indexed_test_bam, indexed_control_bam ->
+                tuple( analysis, indexed_test_bam, indexed_control_bam )
+            } \
+            | set { somatic_inputs }
+
+        somatic_variant_calling(
+            somatic_inputs,
+            indexed_ref_fasta,
+            params.manta_call_regions,
+            params.strelka_call_regions,
+        )
+
+        // human
+
+        subset_human_somatic_variants(
+            somatic_variant_calling.out,
+            human_regions_bed,
+        )
+
+        human_somatic_annotation(
+            subset_human_somatic_variants.out,
+            indexed_ref_fasta,
+            human_vep_cache,
+            human_chrom_synonyms,
+            'homo_sapiens',
+        )
+
+        // mouse
+
+        subset_mouse_somatic_variants(
+            somatic_variant_calling.out,
+            mouse_regions_bed,
+        )
+
+        mouse_somatic_annotation(
+            subset_mouse_somatic_variants.out,
+            indexed_ref_fasta,
+            mouse_vep_cache,
+            mouse_chrom_synonyms,
+            'mus_musculus',
+        )
     }
+
+
+    // STEP 9 - Create a MultiQC report
+    human_logs = Channel.empty() \
+        | mix( mosdepth_human.out.dists ) \
+        | mix( mosdepth_human.out.summary ) \
+        | mix( qualimap_human.out ) \
+        | collect
+
+    mouse_logs = Channel.empty() \
+        | mix( mosdepth_mouse.out.dists ) \
+        | mix( mosdepth_mouse.out.summary ) \
+        | mix( qualimap_mouse.out ) \
+        | collect
+
+    logs = Channel.empty() \
+        | mix( dna_alignment.out.logs ) \
+        | collect
+
+    multiqc( logs, human_logs, mouse_logs, params.multiqc_config )
 }
+
 
 workflow.onComplete {
 
@@ -116,6 +335,7 @@ workflow.onComplete {
     log.info "Execution status: ${workflow.success ? 'success' : 'failed'}"
     log.info "Output directory: ${params.publish_dir}"
 }
+
 
 workflow.onError {
 
@@ -137,6 +357,11 @@ def check_params() {
     if( params.version ) {
         log.info( workflow.manifest.version )
         exit 0
+    }
+
+    if( !params.readgroup_csv ) {
+        log.info "Readgroup CSV not specified. Please using the `--readgroup_csv` parameter"
+        exit 1
     }
 }
 
@@ -163,10 +388,40 @@ def usage() {
             Show additional execution options and exit
 
 
-    Required params:
+    Workflow input params:
 
         --readgroup_csv FILE
             Comma-separated list of sample and readgroup inputs
+            Please see: https://github.com/ampatchlab/nf-pdx#readgroup-inputs
+
+        --germline_csv FILE
+            Comma-separated list of analysis identifiers and sample inputs
+            Please see: https://github.com/ampatchlab/nf-pdx#germline-inputs
+
+        --somatic_csv FILE
+            Comma-separated list of analysis identifiers and test and control sample inputs
+            Please see: https://github.com/ampatchlab/nf-pdx#somatic-inputs
+
+
+    Reference genome params:
+
+        --human_genome_assembly STR
+            Human genome assembly name [Default: ${defaults.human_genome_assembly}]
+
+        --human_ref_fasta FILE
+            Override the human reference FASTA file with FILE [Default: ${defaults.human_ref_fasta ?: null}]
+
+        --human_vep_cache FILE
+            Override the human VEP cache with FILE [Default: ${defaults.human_vep_cache ?: null}]
+
+        --mouse_genome_assembly STR
+            Human genome assembly name [Default: ${defaults.mouse_genome_assembly}]
+
+        --mouse_ref_fasta FILE
+            Override the mouse reference FASTA file with FILE [Default: ${defaults.mouse_ref_fasta ?: null}]
+
+        --mouse_vep_cache FILE
+            Override the mouse VEP cache with FILE [Default: ${defaults.mouse_vep_cache ?: null}]
 
 
     Adapter trimming params:
@@ -179,6 +434,45 @@ def usage() {
 
         --r2_adapter_file FILE
             Override the R2 adapter file with FILE [Default: ${defaults.r2_adapter_file ?: null}]
+
+
+    Mosdepth params:
+
+        --human_mosdepth_bed_file FILE
+            Override the Mosdepth BED file of human regions [Default: ${defaults.human_mosdepth_bed_file ?: null}]
+
+        --mouse_mosdepth_bed_file FILE
+            Override the Mosdepth BED file of mouse regions [Default: ${defaults.mouse_mosdepth_bed_file ?: null}]
+
+        --skip_mosdepth
+            Skips Mosdepth process execution
+
+
+    Qualimap params:
+
+        --human_qualimap_feature_file FILE
+            Override the QualiMap feature file of human regions in GFF/GTF or BED format [Default: ${defaults.human_qualimap_feature_file ?: null}]
+
+        --mouse_qualimap_feature_file FILE
+            Override the QualiMap feature file of mouse regions in GFF/GTF or BED format [Default: ${defaults.mouse_qualimap_feature_file ?: null}]
+
+        --skip_qualimap
+            Skips QualiMap process execution
+
+
+    Strelka and Manta params:
+
+        --call_regions FILE
+            Restrict variant calling to the regions in BED FILE [Default: ${defaults.call_regions ?: null}]
+
+        --exome
+            Provide appropriate settings for WES and other regional enrichment analyses
+
+
+    Ensembl-VEP params:
+
+        --vep_cache_type STR
+            Apply when using a merged or refseq VEP cache [Either: 'merged', 'refseq'; Default: ${defaults.vep_cache_type ?: null}]
 
 
     Output params:

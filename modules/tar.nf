@@ -29,36 +29,30 @@ params.publish_dir = './results'
 params.publish_everything = false
 params.publish_mode = 'copy'
 
-params.publish_multiqc = false
+params.publish_extract = false
 
 
 /*
  * Processes
  */
 
-process multiqc {
+process extract {
 
-    label 'multiqc'
+    tag { archive.name }
 
     publishDir(
         path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
-        enabled: params.publish_everything || params.publish_multiqc,
+        enabled: params.publish_everything || params.publish_extract,
         mode: params.publish_mode,
     )
 
     input:
-    path 'data/*'
-    path 'human/*'
-    path 'mouse/*'
-    path config
+    path archive
 
     output:
-    path "multiqc_report.html", emit: report
-    path "multiqc_data", emit: data
+    path "*"
 
     """
-    multiqc \\
-        --config "${config}" \\
-        .
+    tar -xf "${archive}"
     """
 }

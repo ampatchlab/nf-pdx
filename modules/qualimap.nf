@@ -29,71 +29,52 @@ params.publish_dir = './results'
 params.publish_everything = false
 params.publish_mode = 'copy'
 
-params.publish_bwa_index = false
-params.publish_bwa_mem = false
+params.publish_qualimap = false
+
+params.num_reads = 1000
+params.num_windows = 400
 
 
 /*
  * Processes
  */
 
-process bwa_index {
+process qualimap {
 
-    tag { fasta }
+    tag { bam.name }
 
-    label 'bwakit'
+    label 'qualimap'
 
     publishDir(
         path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
-        enabled: params.publish_everything || params.publish_bwa_index,
+        enabled: params.publish_everything || params.publish_qualimap,
         mode: params.publish_mode,
     )
 
     input:
-    path fasta
+    path bam
+    path gff
 
     output:
-    path "${fasta}.{amb,ann,bwt,pac,sa}"
-
-    """
-    bwa index "${fasta}"
-    """
-}
-
-process bwa_mem {
-
-    tag { sample == readgroup ? sample : "${sample}:${readgroup}" }
-
-    label 'bwakit'
-
-    publishDir(
-        path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
-        enabled: params.publish_everything || params.publish_bwa_mem,
-        mode: params.publish_mode,
-    )
-
-    input:
-    tuple val(sample), val(readgroup), path(reads)
-    path bwa_index
-
-    output:
-    tuple val(sample), path("${readgroup}.aln.bam")
+    path "${bam.baseName}"
 
     script:
-    def task_cpus = task.cpus > 1 ? task.cpus - 1 : task.cpus
+    def avail_mem = task.memory ? "${task.memory.toGiga()}g" : "1200m"
+    def JAVA_OPTS = "-XX:+UseSerialGC -Xms32m -Xmx${avail_mem}"
 
-    def idxbase = bwa_index.first().baseName
-    def fastq_files = reads.collect { /"$it"/ }.join(' ')
+    def feature_file = gff.name != 'null' ? /--feature-file "${gff}"/ : ''
 
     """
-    bwa mem \\
-        -t ${task_cpus} \\
-        -R '@RG\\tID:${readgroup}\\tSM:${sample}' \\
-        "${idxbase}" \\
-        ${fastq_files} |
-    samtools view \\
-        -1 \\
-        -o "${readgroup}.aln.bam" \\
-        -
+    export JAVA_OPTS="${JAVA_OPTS}"
+    qualimap bamqc \\
+        -bam "${bam}" \\
+        -nr ${params.num_reads} \\
+        -nt ${task.cpus} \\
+        -nw ${params.num_windows} \\
+        -outdir "${bam.baseName}" \\
+        ${feature_file} \\
+        --paint-chromosome-limits \\
+        --collect-overlap-pairs \\
+        --skip-duplicated
     """
 }

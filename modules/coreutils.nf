@@ -29,36 +29,42 @@ params.publish_dir = './results'
 params.publish_everything = false
 params.publish_mode = 'copy'
 
-params.publish_multiqc = false
+params.publish_split_regions = false
+
+params.num_regions = 1000000
+params.suffix_length = 5
 
 
 /*
  * Processes
  */
 
-process multiqc {
+process split_regions {
 
-    label 'multiqc'
+    tag { sample }
+
+    label 'coreutils'
 
     publishDir(
         path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
-        enabled: params.publish_everything || params.publish_multiqc,
+        enabled: params.publish_everything || params.publish_split_regions,
         mode: params.publish_mode,
     )
 
     input:
-    path 'data/*'
-    path 'human/*'
-    path 'mouse/*'
-    path config
+    tuple val(sample), path(bed)
 
     output:
-    path "multiqc_report.html", emit: report
-    path "multiqc_data", emit: data
+    tuple val(sample), path("${sample}.${/[0-9]/*params.suffix_length}.bed")
 
-    """
-    multiqc \\
-        --config "${config}" \\
-        .
-    """
+    shell:
+    '''
+    zcat "!{bed}" | shuf | split \\
+        -a "!{params.suffix_length}" \\
+        -d \\
+        -l "!{params.num_regions}" \\
+        --filter='LC_ALL=C sort -k1,1V -k2,2n -k3,3n > ${FILE}.bed' \\
+        - \\
+        "!{sample}."
+    '''
 }

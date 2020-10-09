@@ -52,11 +52,11 @@ process cutadapt {
     )
 
     input:
-    tuple readgroup, path(input_reads)
+    tuple val(readgroup), path(input_reads)
     path adapter_files
 
     output:
-    tuple readgroup, path(output_reads), emit: trimmed_reads
+    tuple val(readgroup), path(output_reads), emit: trimmed_reads
     path "${readgroup}.log", emit: logs
 
     script:

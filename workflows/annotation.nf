@@ -1,3 +1,5 @@
+#!/usr/bin/env nextflow
+
 /*
 vim: syntax=groovy
 -*- mode: groovy;-*-
@@ -21,44 +23,44 @@ vim: syntax=groovy
  */
 
 
-/*
- * Params
- */
-
-params.publish_dir = './results'
-params.publish_everything = false
-params.publish_mode = 'copy'
-
-params.publish_multiqc = false
+include { vep } from '../modules/vep.nf' params( params )
+include { vepvcf2tsv } from '../modules/pysam' params( params )
 
 
-/*
- * Processes
- */
 
-process multiqc {
+workflow ensembl_vep {
 
-    label 'multiqc'
+    take:
 
-    publishDir(
-        path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
-        enabled: params.publish_everything || params.publish_multiqc,
-        mode: params.publish_mode,
+    indexed_vcf_tuples
+    indexed_ref_fasta
+    vep_cache
+    chrom_synonyms
+    species
+
+
+    main:
+
+    // STEP 1 - Annotate the variants using VEP
+    vep(
+        indexed_vcf_tuples,
+        indexed_ref_fasta,
+        vep_cache,
+        chrom_synonyms,
+        species,
     )
 
-    input:
-    path 'data/*'
-    path 'human/*'
-    path 'mouse/*'
-    path config
 
-    output:
-    path "multiqc_report.html", emit: report
-    path "multiqc_data", emit: data
+    // STEP 2 - Convert the VEP VCF files to tab-separated values
+    vep.out.annotated_variants \
+        | map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) } \
+        | vepvcf2tsv
 
-    """
-    multiqc \\
-        --config "${config}" \\
-        .
-    """
+
+    emit:
+
+    vep_vcf = vep.out.annotated_variants
+
+    all_variants_tsv = vepvcf2tsv.out.all_variants
+    pass_variants_tsv = vepvcf2tsv.out.pass_variants
 }

@@ -25,6 +25,10 @@ import nextflow.splitter.CsvSplitter
 
 def parse_readgroup_csv( csv ) {
 
+    if( !csv ) {
+        return Channel.empty()
+    }
+
     def splitter = new CsvSplitter().options( header:true )
     def reader = new BufferedReader( new FileReader( csv ) )
 
@@ -58,7 +62,7 @@ def parse_readgroup_csv( csv ) {
         fastq_cols = se_fastq_cols
     }
     else {
-        error "${csv.name} - Invalid column header configuration: ${header}"
+        error "${csv} - Invalid column header configuration: ${header}"
     }
 
     def readgroups = []
@@ -71,7 +75,7 @@ def parse_readgroup_csv( csv ) {
     while( row = splitter.fetchRecord( reader ) ) {
 
         if( !header_cols.every() ) {
-            error "${csv.name} - Missing one of ${header_cols} for row: ${row}"
+            error "${csv} - Missing one of ${header_cols} for row: ${row}"
         }
 
         def sample_fields = sample_cols.collect { row[ it ].replaceAll( /\./, '_' ) }
@@ -80,7 +84,7 @@ def parse_readgroup_csv( csv ) {
         def readgroup = sample_fields.last()
 
         if( readgroup in readgroups ) {
-            error "${csv.name} - Must not use sample/readgroup labels more than once: ${readgroup}"
+            error "${csv} - Cannot use this sample/readgroup label more than once: ${readgroup}"
         }
         readgroups.add( readgroup )
 
@@ -91,15 +95,110 @@ def parse_readgroup_csv( csv ) {
             def extensions = [ '.fastq', '.fq', '.fastq.gz', '.fq.gz', '.fastq.bz2', '.fq.bz2' ]
 
             if( !extensions.find { fastq.name.endsWith( it ) } ) {
-                error "${csv.name} - FASTQ file has an unsupported extension: ${fastq.name}"
+                error "${csv} - FASTQ file has an unsupported extension: ${fastq.name}"
             }
             if( fastq.name in fastq_filenames ) {
-                error "${csv.name} - FASTQ file must not be used more than once: ${fastq.name}"
+                error "${csv} - FASTQ file must not be used more than once: ${fastq.name}"
             }
             fastq_filenames.add( fastq.name )
         }
 
         inputs.add( tuple( sample, readgroup, fastqs ) )
+    }
+
+    return Channel.from( inputs )
+}
+
+
+def parse_germline_csv( csv ) {
+
+    if( !csv ) {
+        return Channel.empty()
+    }
+
+    def splitter = new CsvSplitter().options( header:true )
+    def reader = new BufferedReader( new FileReader( csv ) )
+
+    splitter.parseHeader(reader)
+
+    List<String> header = splitter.columnsHeader
+
+    def required_cols = [ 'analysis', 'samples' ]
+
+    if( !required_cols.every { header.count(it) == 1 } ) {
+        error "${csv} - Invalid column header configuration: ${header}"
+    }
+
+    def analyses = []
+
+    def inputs = []
+
+    Map<String,String> row
+
+    while( row = splitter.fetchRecord( reader ) ) {
+
+        if( !required_cols.every() ) {
+            error "${csv} - Missing one of ${required_cols} for row: ${row}"
+        }
+
+        def (analysis, samples) = required_cols.collect { row[ it ].replaceAll( /\./, '_' ) }
+
+        if( analysis in analyses ) {
+            error "${csv} - Cannot use this analysis more than once: ${analysis}"
+        }
+        analyses.add( analysis )
+
+        List<String> sample_list = samples.tokenize( '|' ).unique()
+
+        inputs.add( tuple( analysis, sample_list ) )
+    }
+
+    return Channel.from( inputs )
+}
+
+
+def parse_somatic_csv( csv ) {
+
+    if( !csv ) {
+        return Channel.empty()
+    }
+
+    def splitter = new CsvSplitter().options( header:true )
+    def reader = new BufferedReader( new FileReader( csv ) )
+
+    splitter.parseHeader(reader)
+
+    List<String> header = splitter.columnsHeader
+
+    def required_cols = [ 'analysis', 'test', 'control' ]
+
+    if( !required_cols.every { header.count(it) == 1 } ) {
+        error "${csv} - Invalid column header configuration: ${header}"
+    }
+
+    def analyses = []
+
+    def inputs = []
+
+    Map<String,String> row
+
+    while( row = splitter.fetchRecord( reader ) ) {
+
+        if( !required_cols.every() ) {
+            error "${csv} - Missing one of ${required_cols} for row: ${row}"
+        }
+
+        def (analysis, test, control) = required_cols.collect { row[ it ].replaceAll( /\./, '_' ) }
+
+        if( analysis in analyses ) {
+            error "${csv} - Cannot use this analysis more than once: ${analysis}"
+        }
+        if( test == control ) {
+            error "${csv} - Cannot use the same test/control sample for analysis: ${analysis}"
+        }
+        analyses.add( analysis )
+
+        inputs.add( tuple( analysis, test, control ) )
     }
 
     return Channel.from( inputs )

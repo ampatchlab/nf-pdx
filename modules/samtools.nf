@@ -111,7 +111,7 @@ process samtools_merge {
     )
 
     input:
-    tuple sample, path(bams)
+    tuple val(sample), path(bams)
 
     output:
     path "${sample}.bam{,.bai}"

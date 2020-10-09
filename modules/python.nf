@@ -54,10 +54,10 @@ process concat_ref_genomes {
 
     output:
     path "combined_${human_prefix}_${mouse_prefix}.fa", emit: fasta
-    path "${human_prefix}.bed", emit: human_regions_bed
     path "${human_prefix}.tsv", emit: human_chrom_synonyms
-    path "${mouse_prefix}.bed", emit: mouse_regions_bed
+    path "${human_prefix}.txt", emit: human_chrom_list
     path "${mouse_prefix}.tsv", emit: mouse_chrom_synonyms
+    path "${mouse_prefix}.txt", emit: mouse_chrom_list
 
     """
     #!/usr/bin/env python
@@ -77,21 +77,16 @@ process concat_ref_genomes {
         else:
             return open(filename, mode)
 
-    def seqio_writer(output_handle, format_string):
+    def seq_writer(output_handle, format_string):
         while True:
             rec = (yield)
             SeqIO.write(rec, output_handle, format_string)
-
-    human_chroms = []
-    mouse_chroms = []
 
     human_prefix = '${human_prefix}'
     mouse_prefix = '${mouse_prefix}'
 
     human_fasta = '${human_ref_fasta}'
     mouse_fasta = '${mouse_ref_fasta}'
-
-    writer_kwargs = { 'delimiter': '\\t', 'lineterminator': '\\n' }
 
     with ExitStack() as stack:
 
@@ -101,39 +96,34 @@ process concat_ref_genomes {
         out_fn = '_'.join(['combined', human_prefix, mouse_prefix]) + '.fa'
         out_fh = stack.enter_context(openfile(out_fn, 'w'))
 
-        seq_writer = seqio_writer(out_fh, 'fasta')
-        next(seq_writer)
+        writer = seq_writer(out_fh, 'fasta')
+        next(writer)
+
+        human_chrom_list = stack.enter_context(openfile(human_prefix + '.txt', 'w'))
+        mouse_chrom_list = stack.enter_context(openfile(mouse_prefix + '.txt', 'w'))
+
+        human_chrom_syns = stack.enter_context(openfile(human_prefix + '.tsv', 'w'))
+        mouse_chrom_syns = stack.enter_context(openfile(mouse_prefix + '.tsv', 'w'))
+
+        csv_kwargs = { 'delimiter': '\\t', 'lineterminator': '\\n' }
+
+        human_syns_csv = csv.writer(human_chrom_syns, **csv_kwargs)
+        mouse_syns_csv = csv.writer(mouse_chrom_syns, **csv_kwargs)
 
         for rec in SeqIO.parse(human_ref_fh, 'fasta'):
-            human_chroms.append((rec.id, len(rec.seq)))
-            rec.id = '_'.join([human_prefix, rec.id])
-            seq_writer.send(rec)
+            prefixed_id = '_'.join([human_prefix, rec.id])
+            human_chrom_list.write(prefixed_id + '\\n')
+            human_syns_csv.writerow([prefixed_id, rec.id])
+            rec.id = prefixed_id
+            writer.send(rec)
 
         for rec in SeqIO.parse(mouse_ref_fh, 'fasta'):
-            mouse_chroms.append((rec.id, len(rec.seq)))
-            rec.id = '_'.join([mouse_prefix, rec.id])
-            seq_writer.send(rec)
+            prefixed_id = '_'.join([mouse_prefix, rec.id])
+            mouse_chrom_list.write(prefixed_id + '\\n')
+            mouse_syns_csv.writerow([prefixed_id, rec.id])
+            rec.id = prefixed_id
+            writer.send(rec)
 
-        seq_writer.close()
-
-    # BED regions
-    with openfile(human_prefix + '.bed', 'w') as bed:
-        writer = csv.writer(bed, **writer_kwargs)
-        for rec_id, seq_length in human_chroms:
-            writer.writerow(['_'.join([human_prefix, rec_id]), 0, seq_length])
-    with openfile(mouse_prefix + '.bed', 'w') as bed:
-        writer = csv.writer(bed, **writer_kwargs)
-        for rec_id, seq_length in mouse_chroms:
-            writer.writerow(['_'.join([mouse_prefix, rec_id]), 0, seq_length])
-
-    # VEP synonyms
-    with openfile(human_prefix + '.tsv', 'w') as synonyms:
-        writer = csv.writer(synonyms, **writer_kwargs)
-        for rec_id, seq_length in human_chroms:
-            writer.writerow(['_'.join([human_prefix, rec_id]), rec_id])
-    with openfile(mouse_prefix + '.tsv', 'w') as synonyms:
-        writer = csv.writer(synonyms, **writer_kwargs)
-        for rec_id, seq_length in mouse_chroms:
-            writer.writerow(['_'.join([mouse_prefix, rec_id]), rec_id])
+        writer.close()
     """
 }

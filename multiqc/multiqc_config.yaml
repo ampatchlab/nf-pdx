@@ -22,17 +22,48 @@ module_order:
             - '*.trimmed_fastqc.zip'
     - picard
     - samtools
+    - mosdepth:
+        name: 'Mosdepth (human)'
+        anchor: 'mosdepth-human'
+        target: 'Mosdepth'
+        path_filters:
+            - './human/*'
+    - mosdepth:
+        name: 'Mosdepth (mouse)'
+        anchor: 'mosdepth-mouse'
+        target: 'Mosdepth'
+        path_filters:
+            - './mouse/*'
+    - qualimap:
+        name: 'QualiMap (human)'
+        anchor: 'qualimap-human'
+        target: 'QualiMap'
+        path_filters:
+            - './human/*'
+    - qualimap:
+        name: 'QualiMap (mouse)'
+        anchor: 'qualimap-mouse'
+        target: 'QualiMap'
+        path_filters:
+            - './mouse/*'
 
 extra_fn_clean_exts:
     - type: 'truncate'
       pattern: '.markdup'
       module:
+        - mosdepth-human
+        - mosdepth-mouse
+        - qualimap-human
+        - qualimap-mouse
         - Samtools
 
 run_modules:
     - fastqc
     - cutadapt
     - picard
+    - samtools
+    - mosdepth
+    - qualimap
 
 exclude_modules:
     - custom_content

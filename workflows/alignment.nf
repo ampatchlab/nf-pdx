@@ -23,45 +23,26 @@ vim: syntax=groovy
  */
 
 
-include { bwa_index } from '../modules/bwakit.nf' params( params )
 include { bwa_mem } from '../modules/bwakit.nf' params( params )
-include { concat_ref_genomes } from '../modules/biopython.nf' params( params )
 include { cutadapt } from '../modules/cutadapt.nf' params( params )
 include { fastqc } from '../modules/fastqc.nf' params( params )
 include { mark_duplicates } from '../modules/picard.nf' params( params )
-include { multiqc } from '../modules/multiqc.nf' params( params )
-include { samtools_faidx } from '../modules/samtools.nf' params( params )
 include { samtools_merge } from '../modules/samtools.nf' params( params )
 include { samtools_sort } from '../modules/samtools.nf' params( params )
+include { samtools_stats } from '../modules/samtools.nf' params( params )
 
 
-workflow germline_pdx {
+
+workflow dna_alignment {
 
     take:
 
     sample_readgroup_reads_tuples
+    bwa_index
     cutadapt_adapter_files
-    human_genome_assembly
-    human_ref_fasta
-    human_vep_cache
-    mouse_genome_assembly
-    mouse_ref_fasta
-    mouse_vep_cache
-    multiqc_cfg
+
 
     main:
-
-    // PRE-PROCESSING - Concatenate the reference genomes
-    human_ref_inputs = [ human_genome_assembly, human_ref_fasta ]
-    mouse_ref_inputs = [ mouse_genome_assembly, mouse_ref_fasta ]
-
-    combined_ref_genome = concat_ref_genomes( human_ref_inputs, mouse_ref_inputs )
-
-
-    // PRE-PROCESSING - Index the combined reference genome with BWA and Samtools
-    bwa_index( combined_ref_genome )
-    samtools_faidx( combined_ref_genome )
-
 
     // PRE-PROCESSING - Replace the 'sample' value with a special group key object
     sample_readgroup_reads_tuples \
@@ -96,7 +77,7 @@ workflow germline_pdx {
         | map { readgroup, sample, reads -> tuple( sample, readgroup, reads ) } \
         | set { bwa_mem_inputs }
 
-    bwa_mem( bwa_mem_inputs, bwa_index.out )
+    bwa_mem( bwa_mem_inputs, bwa_index )
 
 
     // STEP 4 - Coordinate sort the aligned readgroups
@@ -119,13 +100,20 @@ workflow germline_pdx {
         | mark_duplicates
 
 
-    // STEP 6 - Create a MultiQC report
-    Channel.empty() \
+    // STEP 6 - Run SAMtools stats
+    mark_duplicates.out.alignments \
+        | map { bam, bai -> bam } \
+        | samtools_stats
+
+
+    emit:
+
+    alignments = mark_duplicates.out.alignments \
+        | map { bam, bai -> tuple( bam.getBaseName(2), tuple( bam, bai ) ) }
+
+    logs = Channel.empty() \
         | mix( cutadapt.out.logs ) \
         | mix( fastqc.out ) \
         | mix( mark_duplicates.out.metrics ) \
-        | collect \
-        | set { multiqc_inputs }
-
-    multiqc( multiqc_inputs, multiqc_cfg )
+        | mix( samtools_stats.out )
 }
