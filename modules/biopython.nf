@@ -46,6 +46,15 @@ process concat_ref_genomes {
         path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
         enabled: params.publish_everything || params.publish_concat_ref_genomes,
         mode: params.publish_mode,
+        saveAs: { fn ->
+            if( fn.endsWith('.bed') ) {
+                return "regions_bed/${fn}"
+            }
+            if( fn.endsWith('.tsv') ) {
+                return "chrom_synonyms/${fn}"
+            }
+            return fn
+        }
     )
 
     input:
