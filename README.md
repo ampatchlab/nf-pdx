@@ -45,8 +45,8 @@ Workflow input params:
 
 Reference genome params:
 
-    --human_genome_assembly STR
-        Human genome assembly name [Default: GRCh38]
+    --human_genome STR
+        Human genome name [Default: GRCh38]
 
     --human_ref_fasta FILE
         Override the human reference FASTA file with FILE [Default: null]
@@ -54,8 +54,8 @@ Reference genome params:
     --human_vep_cache FILE
         Override the human VEP cache with FILE [Default: null]
 
-    --mouse_genome_assembly STR
-        Human genome assembly name [Default: GRCm38]
+    --mouse_genome STR
+        Human genome name [Default: GRCm38]
 
     --mouse_ref_fasta FILE
         Override the mouse reference FASTA file with FILE [Default: null]

@@ -87,17 +87,17 @@ params.r2_adapter_file = params.adapters in params.adapter_files
     : "${baseDir}/resource-adapters/null-2.fa"
 
 // Reference genome files
-params.human_ref_fasta = params.human_genome_assembly in params.genome_assemblies
-    ? params.genome_assemblies[ params.human_genome_assembly ].ref_fasta
+params.human_ref_fasta = params.human_genome in params.human_genomes
+    ? params.human_genomes[ params.human_genome ].ref_fasta
     : null
-params.human_vep_cache = params.human_genome_assembly in params.genome_assemblies
-    ? params.genome_assemblies[ params.human_genome_assembly ].vep_cache
+params.human_vep_cache = params.human_genome in params.human_genomes
+    ? params.human_genomes[ params.human_genome ].vep_cache
     : null
-params.mouse_ref_fasta = params.mouse_genome_assembly in params.genome_assemblies
-    ? params.genome_assemblies[ params.mouse_genome_assembly ].ref_fasta
+params.mouse_ref_fasta = params.mouse_genome in params.mouse_genomes
+    ? params.mouse_genomes[ params.mouse_genome ].ref_fasta
     : null
-params.mouse_vep_cache = params.mouse_genome_assembly in params.genome_assemblies
-    ? params.genome_assemblies[ params.mouse_genome_assembly ].vep_cache
+params.mouse_vep_cache = params.mouse_genome in params.mouse_genomes
+    ? params.mouse_genomes[ params.mouse_genome ].vep_cache
     : null
 
 // Manta and Strelka call regions
@@ -118,11 +118,11 @@ workflow {
     cutadapt_adapter_files = [ params.r1_adapter_file, params.r2_adapter_file ]
 
     human_ref_inputs = [
-        params.human_genome_assembly.replaceAll( /\./, '_' ),
+        params.human_genome.replaceAll( /\./, '_' ),
         params.human_ref_fasta,
     ]
     mouse_ref_inputs = [
-        params.mouse_genome_assembly.replaceAll( /\./, '_' ),
+        params.mouse_genome.replaceAll( /\./, '_' ),
         params.mouse_ref_fasta,
     ]
 
@@ -405,8 +405,8 @@ def usage() {
 
     Reference genome params:
 
-        --human_genome_assembly STR
-            Human genome assembly name [Default: ${defaults.human_genome_assembly}]
+        --human_genome STR
+            Human genome name [Default: ${defaults.human_genome}]
 
         --human_ref_fasta FILE
             Override the human reference FASTA file with FILE [Default: ${defaults.human_ref_fasta ?: null}]
@@ -414,8 +414,8 @@ def usage() {
         --human_vep_cache FILE
             Override the human VEP cache with FILE [Default: ${defaults.human_vep_cache ?: null}]
 
-        --mouse_genome_assembly STR
-            Human genome assembly name [Default: ${defaults.mouse_genome_assembly}]
+        --mouse_genome STR
+            Human genome name [Default: ${defaults.mouse_genome}]
 
         --mouse_ref_fasta FILE
             Override the mouse reference FASTA file with FILE [Default: ${defaults.mouse_ref_fasta ?: null}]
