@@ -67,3 +67,7 @@ run_modules:
 
 exclude_modules:
     - custom_content
+
+table_columns_visible:
+    Samtools:
+        mapped_passed: False
