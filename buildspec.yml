@@ -22,7 +22,7 @@ phases:
       - |
         ./nextflow -Dhttps.protocols=TLSv1,TLSv1.1,TLSv1.2 run . \
           -ansi-log false \
-          -profile awsbatch,ci \
+          -profile awsbatch,NA12878_C57BL_6NJ-SE \
           -work-dir "$bucket/$CODEBUILD_BUILD_ID/work" \
           --publish_dir "$bucket/$CODEBUILD_BUILD_ID/results" \
           --aws_region "$AWS_DEFAULT_REGION" \

@@ -1,5 +1,6 @@
 # ampatchlab/nf-pdx
 
+[![Build Status](https://codebuild.ap-southeast-2.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoibVA2TXNnVys3QkQzWHdzOENCbE4vVThmL0dmQWR4TlpXRlM3eE1DaWZrK2dYbkdkQ1A1bVJpWlFCSmZFbmpySU96SVEzU2VjTFBaUkFJMUpPN2JZZmFjPSIsIml2UGFyYW1ldGVyU3BlYyI6IlRLblJJNmpuU01UMnF5TWoiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master)](https://ap-southeast-2.console.aws.amazon.com/codesuite/codebuild/projects/nf-pdx/history)
 [![Nextflow](https://img.shields.io/badge/nextflow-%E2%89%A520.07.1-brightgreen.svg)](https://www.nextflow.io/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
