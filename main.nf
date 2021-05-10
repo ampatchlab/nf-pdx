@@ -157,8 +157,8 @@ workflow {
 
 
     // STEP 4 - Run Mosdepth
-    mosdepth_inputs = ! params.skip_mosdepth \
-        ? dna_alignment.out.alignments.map { sample, indexed_bam -> indexed_bam } \
+    mosdepth_inputs = ! params.skip_mosdepth
+        ? dna_alignment.out.alignments.map { sample, indexed_bam -> indexed_bam }
         : Channel.empty()
 
     mosdepth_human( mosdepth_inputs, params.human_mosdepth_bed_file ?: human_regions_bed )

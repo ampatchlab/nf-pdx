@@ -68,5 +68,8 @@ process mosdepth {
         -n \\
         "${bam.baseName}" \\
         "${bam}"
+    touch \\
+        "${bam.baseName}.regions.bed.gz" \\
+        "${bam.baseName}.regions.bed.gz.csi"
     """
 }
