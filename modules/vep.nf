@@ -68,6 +68,10 @@ process vep {
                        ? "--${params.vep_cache_type}"
                        : ''
 
+    def synonyms = chrom_synonyms.name != 'null'
+                 ? /--synonyms "${chrom_synonyms}"/
+                 : ''
+
     """
     vep \\
         --everything \\
@@ -84,7 +88,7 @@ process vep {
         ${vep_cache_type} \\
         --offline \\
         --fasta "${indexed_fasta.first()}" \\
-        --synonyms "${chrom_synonyms}" \\
+        ${synonyms} \\
         --compress_output bgzip \\
         --allow_non_variant \\
         --buffer_size "${params.buffer_size}"
