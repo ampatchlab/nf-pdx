@@ -43,6 +43,8 @@ include { parse_readgroup_csv } from './functions/input_csv_parsers.nf' params( 
 include { parse_somatic_csv } from './functions/input_csv_parsers.nf' params( params )
 include { parse_germline_csv } from './functions/input_csv_parsers.nf' params( params )
 
+include { get_header } from './functions/input_csv_parsers.nf' params( params )
+
 // modules
 include { concat_ref_genomes } from './modules/biopython.nf' params( params )
 include { bwa_index } from './modules/bwakit.nf' params( params )
@@ -65,8 +67,12 @@ include { extract as unpack_mouse_vep_cache } from './modules/tar.nf' params( pa
 
 // workflows
 include { dna_alignment } from './workflows/alignment.nf' params( params )
+
 include { germline_variant_calling } from './workflows/variant_calling.nf' params( params )
 include { somatic_variant_calling } from './workflows/variant_calling.nf' params( params )
+
+include { mpileup as germline_mpileup } from './workflows/mpileup.nf' params( params )
+include { mpileup as somatic_mpileup } from './workflows/mpileup.nf' params( params )
 
 include { ensembl_vep as human_germline_annotation } from './workflows/annotation.nf' params( params )
 include { ensembl_vep as human_somatic_annotation } from './workflows/annotation.nf' params( params )
@@ -100,6 +106,14 @@ params.mouse_vep_cache = params.mouse_genome in params.mouse_genomes
     ? params.mouse_genomes[ params.mouse_genome ].vep_cache
     : null
 
+// Mosdepth BED file
+params.human_mosdepth_bed_file = "${baseDir}/assets/null"
+params.mouse_mosdepth_bed_file = "${baseDir}/assets/null"
+
+// QualiMap feature files
+params.human_qualimap_feature_file = "${baseDir}/assets/null"
+params.mouse_qualimap_feature_file = "${baseDir}/assets/null"
+
 // Manta and Strelka call regions
 params.call_regions = "${baseDir}/assets/null"
 
@@ -114,6 +128,10 @@ params.strelka_call_regions = params.call_regions
 workflow {
 
     readgroup_inputs = parse_readgroup_csv( params.readgroup_csv )
+
+    List<String> header = get_header( params.readgroup_csv )
+    Boolean paired_end = header.contains( 'fastq1' ) && header.contains( 'fastq2' )
+    Boolean single_end = header.contains( 'fastq' )
 
     cutadapt_adapter_files = [ params.r1_adapter_file, params.r2_adapter_file ]
 
@@ -207,10 +225,16 @@ workflow {
             params.strelka_call_regions,
         )
 
+        germline_mpileup(
+            germline_inputs,
+            germline_variant_calling.out,
+            indexed_ref_fasta,
+        )
+
         // human
 
         subset_human_germline_variants(
-            germline_variant_calling.out,
+            germline_mpileup.out,
             human_regions_bed,
         )
 
@@ -225,7 +249,7 @@ workflow {
         // mouse
 
         subset_mouse_germline_variants(
-            germline_variant_calling.out,
+            germline_mpileup.out,
             mouse_regions_bed,
         )
 
@@ -275,10 +299,16 @@ workflow {
             params.strelka_call_regions,
         )
 
+        somatic_mpileup(
+            somatic_inputs,
+            somatic_variant_calling.out,
+            indexed_ref_fasta,
+        )
+
         // human
 
         subset_human_somatic_variants(
-            somatic_variant_calling.out,
+            somatic_mpileup.out,
             human_regions_bed,
         )
 
@@ -293,7 +323,7 @@ workflow {
         // mouse
 
         subset_mouse_somatic_variants(
-            somatic_variant_calling.out,
+            somatic_mpileup.out,
             mouse_regions_bed,
         )
 

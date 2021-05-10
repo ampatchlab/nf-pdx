@@ -23,12 +23,8 @@ vim: syntax=groovy
  */
 
 
-include { bcftools_concat } from '../modules/bcftools.nf' params( params )
 include { bcftools_subset_pass } from '../modules/bcftools.nf' params( params )
-include { bcftools_mpileup } from '../modules/bcftools.nf' params( params )
-include { bedops_convert2bed } from '../modules/bedops.nf' params( params )
 include { manta_somatic_wf } from '../modules/manta.nf' params( params )
-include { split_regions } from '../modules/coreutils.nf' params( params )
 include { strelka_germline_wf } from '../modules/strelka.nf' params( params )
 include { strelka_somatic_wf } from '../modules/strelka.nf' params( params )
 
@@ -55,34 +51,15 @@ workflow germline_variant_calling {
     )
 
 
-    // STEP 2 - Chunkify all PASS variants in BED format
-    strelka_germline_wf.out.variants \
-        | bcftools_subset_pass \
-        | map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) } \
-        | bedops_convert2bed \
-        | map { bed -> tuple( bed.getBaseName(3), bed ) } \
-        | split_regions \
-        | join( germline_analysis_tuples ) \
-        | map { sample, beds, indexed_bam_files ->
-            def bed_files = [beds].flatten()
-            def group_key = groupKey( sample, bed_files.size() )
-
-            tuple( group_key, bed_files, indexed_bam_files )
-        } \
-        | transpose( by: 1 ) \
-        | set { mpileup_inputs }
-
-
-    // STEP 3 - Pileup and re-call each chunk of variant positions using BCFtools
-    bcftools_mpileup( mpileup_inputs, indexed_ref_fasta ) \
-        | groupTuple() \
-        | map { sample, vcf_tuples -> tuple( sample.toString(), vcf_tuples.flatten() ) } \
-        | bcftools_concat
+    // STEP 2 - Extract all PASS variants
+    bcftools_subset_pass( strelka_germline_wf.out.variants )
 
 
     emit:
 
-    bcftools_concat.out.map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) }
+    bcftools_subset_pass.out.map { vcf, tbi ->
+        tuple( vcf.getBaseName(3), tuple( vcf, tbi ) )
+    }
 }
 
 
@@ -94,23 +71,36 @@ workflow somatic_variant_calling {
     indexed_ref_fasta
     manta_call_regions
     strelka_call_regions
+    skip_manta
 
 
     main:
 
-    // STEP 1 - Run Manta to call candidate indels
-    manta_somatic_wf(
-        somatic_analysis_tuples,
-        indexed_ref_fasta,
-        manta_call_regions,
-    )
+    if( !skip_manta ) {
+
+        // STEP 1 - Call candidate small indels using Manta
+        manta_somatic_wf(
+            somatic_analysis_tuples,
+            indexed_ref_fasta,
+            manta_call_regions,
+        )
+
+        strelka_inputs = somatic_analysis_tuples \
+            | join( manta_somatic_wf.out.candidate_small_indels )
+    }
+    else {
+
+        candidate_small_indels = [
+            "${baseDir}/assets/null-1",
+            "${baseDir}/assets/null-2",
+        ]
+
+        strelka_inputs = somatic_analysis_tuples \
+            | map { tuple( *it, candidate_small_indels ) }
+    }
 
 
     // STEP 2 - Call variants using Strelka
-    somatic_analysis_tuples \
-        | join( manta_somatic_wf.out.candidate_small_indels ) \
-        | set { strelka_inputs }
-
     strelka_somatic_wf(
         strelka_inputs,
         indexed_ref_fasta,
@@ -118,7 +108,7 @@ workflow somatic_variant_calling {
     )
 
 
-    // STEP 3 - Chunkify all PASS variants in BED format
+    // STEP 3 - Extract all PASS variants
     strelka_somatic_wf.out.somatic_snvs \
         | join( strelka_somatic_wf.out.somatic_indels ) \
         | map { analysis_id, indexed_snvs_vcf, indexed_indels_vcf ->
@@ -127,29 +117,11 @@ workflow somatic_variant_calling {
         | vcf_concat \
         | map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) } \
         | bcftools_subset_pass \
-        | map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) } \
-        | bedops_convert2bed \
-        | map { bed -> tuple( bed.getBaseName(3), bed ) } \
-        | split_regions \
-        | join( somatic_analysis_tuples ) \
-        | map { analysis_id, beds, indexed_test_bam, indexed_control_bam ->
-            def bed_files = [beds].flatten()
-            def group_key = groupKey( analysis_id, bed_files.size() )
-
-            tuple( group_key, bed_files, [ *indexed_test_bam, *indexed_control_bam ] )
-        } \
-        | transpose( by: 1 ) \
-        | set { mpileup_inputs }
-
-
-    // STEP 4 - Pileup and re-call each chunk of variant positions using BCFtools
-    bcftools_mpileup( mpileup_inputs, indexed_ref_fasta ) \
-        | groupTuple() \
-        | map { analysis_id, vcf_tuples -> tuple( analysis_id.toString(), vcf_tuples.flatten() ) } \
-        | bcftools_concat
 
 
     emit:
 
-    bcftools_concat.out.map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) }
+    bcftools_subset_pass.out.map { vcf, tbi ->
+        tuple( vcf.getBaseName(3), tuple( vcf, tbi ) )
+    }
 }

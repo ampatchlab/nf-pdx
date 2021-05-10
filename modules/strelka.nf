@@ -119,12 +119,17 @@ process strelka_somatic_wf {
 
     def avail_mem = task.memory ? "-g ${task.memory.toGiga()}" : 'unlimited'
 
+    def (indel_vcf, indel_tbi) = indexed_indel_candidates
+    def indel_candidates = indel_vcf.name != 'null-1' && indel_tbi.name != 'null-2'
+                         ? /--indelCandidates "${indel_vcf}"/
+                         : ''
+
     """
     configureStrelkaSomaticWorkflow.py \\
         --tumorBam "${indexed_test_bam.first()}" \\
         --normalBam "${indexed_control_bam.first()}" \\
         --referenceFasta "${indexed_fasta.first()}" \\
-        --indelCandidates "${indexed_indel_candidates.first()}" \\
+        ${indel_candidates} \\
         --runDir . \\
         ${call_regions} \\
         ${exome}

@@ -23,18 +23,65 @@ vim: syntax=groovy
 import nextflow.splitter.CsvSplitter
 
 
-def parse_readgroup_csv( csv ) {
+class DictReader implements Iterable<Map<String, String>> {
 
-    if( !csv ) {
-        return Channel.empty()
+    private BufferedReader reader
+    private CsvSplitter splitter
+
+    private final String filePath
+
+    DictReader(String filePath ) {
+        this.reader = new BufferedReader( new FileReader( filePath ) )
+        this.splitter = new CsvSplitter().options( header: true )
+
+        splitter.parseHeader(reader)
     }
 
-    def splitter = new CsvSplitter().options( header:true )
-    def reader = new BufferedReader( new FileReader( csv ) )
+    public List<String> getHeader() {
+        return splitter.columnsHeader
+    }
 
-    splitter.parseHeader(reader)
+    @Override
+    public Iterator<Map<String, String>> iterator() {
 
-    List<String> header = splitter.columnsHeader
+        return new Iterator<Map<String, String>>() {
+
+            private Map<String, String> nextLine
+
+            @Override
+            public boolean hasNext() {
+               if( nextLine == null ) {
+                   nextLine = splitter.fetchRecord( reader )
+               }
+
+               return nextLine != null
+            }
+
+            @Override
+            public Map<String, String> next() {
+                Map<String, String> nextline = nextLine
+                nextLine = null
+
+                return nextline
+            }
+        }
+    }
+}
+
+
+def get_header( csv ) {
+
+    DictReader reader = new DictReader( csv )
+
+    return reader.getHeader()
+}
+
+
+def parse_readgroup_csv( csv ) {
+
+    DictReader reader = new DictReader( csv )
+
+    List<String> header = reader.getHeader()
 
     def sample_cols = [ 'sample' ] + ( 'readgroup' in header ? [ 'readgroup' ] : [] )
 
@@ -70,9 +117,7 @@ def parse_readgroup_csv( csv ) {
 
     def inputs = []
 
-    Map<String,String> row
-
-    while( row = splitter.fetchRecord( reader ) ) {
+    for( Map<String,String> row : reader ) {
 
         if( !header_cols.every() ) {
             error "${csv} - Missing one of ${header_cols} for row: ${row}"
@@ -112,16 +157,9 @@ def parse_readgroup_csv( csv ) {
 
 def parse_germline_csv( csv ) {
 
-    if( !csv ) {
-        return Channel.empty()
-    }
+    DictReader reader = new DictReader( csv )
 
-    def splitter = new CsvSplitter().options( header:true )
-    def reader = new BufferedReader( new FileReader( csv ) )
-
-    splitter.parseHeader(reader)
-
-    List<String> header = splitter.columnsHeader
+    List<String> header = reader.getHeader()
 
     def required_cols = [ 'analysis', 'samples' ]
 
@@ -133,9 +171,7 @@ def parse_germline_csv( csv ) {
 
     def inputs = []
 
-    Map<String,String> row
-
-    while( row = splitter.fetchRecord( reader ) ) {
+    for( Map<String,String> row : reader ) {
 
         if( !required_cols.every() ) {
             error "${csv} - Missing one of ${required_cols} for row: ${row}"
@@ -159,16 +195,9 @@ def parse_germline_csv( csv ) {
 
 def parse_somatic_csv( csv ) {
 
-    if( !csv ) {
-        return Channel.empty()
-    }
+    DictReader reader = new DictReader( csv )
 
-    def splitter = new CsvSplitter().options( header:true )
-    def reader = new BufferedReader( new FileReader( csv ) )
-
-    splitter.parseHeader(reader)
-
-    List<String> header = splitter.columnsHeader
+    List<String> header = reader.getHeader()
 
     def required_cols = [ 'analysis', 'test', 'control' ]
 
@@ -180,9 +209,7 @@ def parse_somatic_csv( csv ) {
 
     def inputs = []
 
-    Map<String,String> row
-
-    while( row = splitter.fetchRecord( reader ) ) {
+    for( Map<String,String> row : reader ) {
 
         if( !required_cols.every() ) {
             error "${csv} - Missing one of ${required_cols} for row: ${row}"
