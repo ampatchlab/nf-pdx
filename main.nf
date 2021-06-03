@@ -297,6 +297,7 @@ workflow {
             indexed_ref_fasta,
             params.manta_call_regions,
             params.strelka_call_regions,
+            single_end,
         )
 
         somatic_mpileup(
