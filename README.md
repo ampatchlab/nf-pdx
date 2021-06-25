@@ -56,7 +56,7 @@ Reference genome params:
         Override the human VEP cache with FILE [Default: null]
 
     --mouse_genome STR
-        Human genome name [Default: GRCm38]
+        Human genome name [Default: GRCm39]
 
     --mouse_ref_fasta FILE
         Override the mouse reference FASTA file with FILE [Default: null]
