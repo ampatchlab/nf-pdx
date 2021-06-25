@@ -62,6 +62,7 @@ workflow ensembl_vep {
     emit:
 
     vep_vcf = vep.out.indexed_vcf
+    vep_stats = vep.out.stats_html
 
     all_variants_tsv = vepvcf2tsv.out.all_variants
     pass_variants_tsv = vepvcf2tsv.out.pass_variants

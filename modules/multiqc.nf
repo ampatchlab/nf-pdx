@@ -47,9 +47,11 @@ process multiqc {
     )
 
     input:
-    path 'data/*'
-    path 'human/*'
-    path 'mouse/*'
+    path './logs/alignment/*'
+    path './logs/mosdepth/*'
+    path './logs/qualimap/*'
+    path './logs/vep/germline/*'
+    path './logs/vep/somatic/*'
     path config
 
     output:

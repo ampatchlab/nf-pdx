@@ -1,0 +1,62 @@
+title: "ampatchlab/nf-pdx"
+subtitle: "Patient-derived xenograft Nextflow pipeline (mouse results)"
+intro_text: False
+
+report_header_info:
+    - Contact E-mail: 'stephen.kazakoff@qimrberghofer.edu.au'
+    - Application Type: 'Patient-derived xenograft Nextflow pipeline'
+
+module_order:
+    - fastqc:
+        name: 'FastQC (raw)'
+        anchor: 'fastqc-raw'
+        target: 'FastQC'
+        path_filters_exclude:
+            - './logs/alignment/*.trimmed_fastqc.zip'
+    - cutadapt
+    - fastqc:
+        name: 'FastQC (trimmed)'
+        anchor: 'fastqc-trimmed'
+        target: 'FastQC'
+        path_filters:
+            - './logs/alignment/*.trimmed_fastqc.zip'
+    - picard
+    - samtools
+    - mosdepth
+    - qualimap
+    - vep:
+        name: 'VEP (germline)'
+        anchor: 'vep-germline'
+        target: 'VEP'
+        path_filters:
+            - './logs/vep/germline/*.stats.html'
+    - vep:
+        name: 'VEP (somatic)'
+        anchor: 'vep-somatic'
+        target: 'VEP'
+        path_filters:
+            - './logs/vep/somatic/*.stats.html'
+
+extra_fn_clean_exts:
+    - type: 'truncate'
+      pattern: '.markdup'
+      module:
+        - mosdepth
+        - qualimap
+        - Samtools
+
+run_modules:
+    - fastqc
+    - cutadapt
+    - picard
+    - samtools
+    - mosdepth
+    - qualimap
+    - vep
+
+exclude_modules:
+    - custom_content
+
+table_columns_visible:
+    Samtools:
+        mapped_passed: False

@@ -48,8 +48,10 @@ include { get_header } from './functions/input_csv_parsers.nf' params( params )
 // modules
 include { concat_ref_genomes } from './modules/biopython.nf' params( params )
 include { bwa_index } from './modules/bwakit.nf' params( params )
-include { multiqc } from './modules/multiqc.nf' params( params )
 include { samtools_faidx } from './modules/samtools.nf' params( params )
+
+include { multiqc as multiqc_human } from './modules/multiqc.nf' params( params )
+include { multiqc as multiqc_mouse } from './modules/multiqc.nf' params( params )
 
 include { gunzip as gunzip_human_somatic_vcf } from './modules/gzip.nf' params( params )
 include { gunzip as gunzip_mouse_somatic_vcf } from './modules/gzip.nf' params( params )
@@ -391,24 +393,38 @@ workflow {
     }
 
 
-    // STEP 9 - Create a MultiQC report
-    human_logs = Channel.empty() \
-        | mix( mosdepth_human.out.dists ) \
-        | mix( mosdepth_human.out.summary ) \
-        | mix( qualimap_human.out ) \
-        | collect
+    // STEP 9 - Create separate human/mouse MultiQC reports
+    human_germline_logs = params.germline_csv
+        ? human_germline_annotation.out.vep_stats
+        : Channel.empty()
+    mouse_germline_logs = params.germline_csv
+        ? mouse_germline_annotation.out.vep_stats
+        : Channel.empty()
 
-    mouse_logs = Channel.empty() \
-        | mix( mosdepth_mouse.out.dists ) \
-        | mix( mosdepth_mouse.out.summary ) \
-        | mix( qualimap_mouse.out ) \
-        | collect
+    human_somatic_logs = params.somatic_csv
+        ? human_somatic_annotation.out.vep_stats
+        : Channel.empty()
+    mouse_somatic_logs = params.somatic_csv
+        ? mouse_somatic_annotation.out.vep_stats
+        : Channel.empty()
 
-    logs = Channel.empty() \
-        | mix( dna_alignment.out.logs ) \
-        | collect
+    multiqc_human(
+        dna_alignment.out.logs.collect(),
+        mosdepth_human.out.dists.collect(),
+        qualimap_human.out.collect(),
+        human_germline_logs.collect(),
+        human_somatic_logs.collect(),
+        params.human_multiqc_config,
+    )
 
-    multiqc( logs, human_logs, mouse_logs, params.multiqc_config )
+    multiqc_mouse(
+        dna_alignment.out.logs.collect(),
+        mosdepth_mouse.out.dists.collect(),
+        qualimap_mouse.out.collect(),
+        mouse_germline_logs.collect(),
+        mouse_somatic_logs.collect(),
+        params.mouse_multiqc_config,
+    )
 }
 
 

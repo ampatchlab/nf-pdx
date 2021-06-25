@@ -1,5 +1,5 @@
 title: "ampatchlab/nf-pdx"
-subtitle: "Patient-derived xenograft Nextflow pipeline"
+subtitle: "Patient-derived xenograft Nextflow pipeline (human results)"
 intro_text: False
 
 report_header_info:
@@ -12,49 +12,37 @@ module_order:
         anchor: 'fastqc-raw'
         target: 'FastQC'
         path_filters_exclude:
-            - '*.trimmed_fastqc.zip'
+            - './logs/alignment/*.trimmed_fastqc.zip'
     - cutadapt
     - fastqc:
         name: 'FastQC (trimmed)'
         anchor: 'fastqc-trimmed'
         target: 'FastQC'
         path_filters:
-            - '*.trimmed_fastqc.zip'
+            - './logs/alignment/*.trimmed_fastqc.zip'
     - picard
     - samtools
-    - mosdepth:
-        name: 'Mosdepth (human)'
-        anchor: 'mosdepth-human'
-        target: 'Mosdepth'
+    - mosdepth
+    - qualimap
+    - vep:
+        name: 'VEP (germline)'
+        anchor: 'vep-germline'
+        target: 'VEP'
         path_filters:
-            - './human/*'
-    - mosdepth:
-        name: 'Mosdepth (mouse)'
-        anchor: 'mosdepth-mouse'
-        target: 'Mosdepth'
+            - './logs/vep/germline/*.stats.html'
+    - vep:
+        name: 'VEP (somatic)'
+        anchor: 'vep-somatic'
+        target: 'VEP'
         path_filters:
-            - './mouse/*'
-    - qualimap:
-        name: 'QualiMap (human)'
-        anchor: 'qualimap-human'
-        target: 'QualiMap'
-        path_filters:
-            - './human/*'
-    - qualimap:
-        name: 'QualiMap (mouse)'
-        anchor: 'qualimap-mouse'
-        target: 'QualiMap'
-        path_filters:
-            - './mouse/*'
+            - './logs/vep/somatic/*.stats.html'
 
 extra_fn_clean_exts:
     - type: 'truncate'
       pattern: '.markdup'
       module:
-        - mosdepth-human
-        - mosdepth-mouse
-        - qualimap-human
-        - qualimap-mouse
+        - mosdepth
+        - qualimap
         - Samtools
 
 run_modules:
@@ -64,6 +52,7 @@ run_modules:
     - samtools
     - mosdepth
     - qualimap
+    - vep
 
 exclude_modules:
     - custom_content
