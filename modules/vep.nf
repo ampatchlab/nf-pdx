@@ -29,6 +29,7 @@ params.publish_dir = './results'
 params.publish_everything = false
 params.publish_mode = 'copy'
 
+params.publish_unpack_vep_cache = false
 params.publish_vep = false
 
 params.vep_cache_type = null
@@ -39,6 +40,31 @@ params.buffer_size = 5000
 /*
  * Processes
  */
+
+process unpack_vep_cache {
+
+    tag { vep_cache.name }
+
+    label 'ensembl_vep'
+
+    publishDir(
+        path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
+        enabled: params.publish_everything || params.publish_unpack_vep_cache,
+        mode: params.publish_mode,
+    )
+
+    input:
+    path vep_cache
+
+    output:
+    path "cache/*/*/info.txt", emit: cache_info
+    path "cache", emit: cache_dir
+
+    """
+    mkdir cache
+    tar -xf "${vep_cache}" -C cache
+    """
+}
 
 process vep {
 
@@ -55,9 +81,10 @@ process vep {
     input:
     tuple val(sample), path(indexed_vcf)
     path indexed_fasta
-    path "cache/*"
+    path cache_dir
     path chrom_synonyms
     val species
+    val assembly
 
     output:
     path "${sample}.${species}.vep.vcf.gz{,.tbi}", emit: annotated_variants
@@ -76,6 +103,7 @@ process vep {
     vep \\
         --everything \\
         --species "${species}" \\
+        --assembly "${assembly}" \\
         --input_file "${indexed_vcf.first()}" \\
         --format vcf \\
         --vcf_info_field "${params.vcf_info_field}" \\
@@ -84,7 +112,7 @@ process vep {
         --stats_file "${sample}.${species}.stats.html" \\
         --warning_file "${sample}.${species}.warnings.txt" \\
         --fork ${task.cpus - 1} \\
-        --dir cache \\
+        --dir "${cache_dir}" \\
         ${vep_cache_type} \\
         --offline \\
         --fasta "${indexed_fasta.first()}" \\
