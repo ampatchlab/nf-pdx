@@ -62,8 +62,8 @@ include { bcftools_subset_regions as subset_human_somatic_variants } from './mod
 include { bcftools_subset_regions as subset_mouse_germline_variants } from './modules/bcftools.nf' params( params )
 include { bcftools_subset_regions as subset_mouse_somatic_variants } from './modules/bcftools.nf' params( params )
 
-include { extract as unpack_human_vep_cache } from './modules/tar.nf' params( params )
-include { extract as unpack_mouse_vep_cache } from './modules/tar.nf' params( params )
+include { unpack_vep_cache as unpack_human_vep_cache } from './modules/vep.nf' params( params )
+include { unpack_vep_cache as unpack_mouse_vep_cache } from './modules/vep.nf' params( params )
 
 // workflows
 include { dna_alignment } from './workflows/alignment.nf' params( params )
@@ -193,13 +193,26 @@ workflow {
 
 
     // STEP 6 - Extract the indexed Ensembl VEP cache files
-    human_vep_cache = ( params.germline_csv || params.somatic_csv )
-        ? unpack_human_vep_cache( params.human_vep_cache )
-        : Channel.empty()
+    if( params.germline_csv || params.somatic_csv ) {
 
-    mouse_vep_cache = ( params.germline_csv || params.somatic_csv )
-        ? unpack_mouse_vep_cache( params.mouse_vep_cache )
-        : Channel.empty()
+        // human
+
+        human_vep_cache = unpack_human_vep_cache( params.human_vep_cache )
+        human_cache_info = human_vep_cache.cache_info.map {
+            it.readLines().collectEntries() { it.split('\t') }
+        }
+        human_vep_species = human_cache_info.map { it['species'] }
+        human_vep_assembly = human_cache_info.map { it['assembly'] }
+
+        // mouse
+
+        mouse_vep_cache = unpack_mouse_vep_cache( params.mouse_vep_cache )
+        mouse_cache_info = mouse_vep_cache.cache_info.map {
+            it.readLines().collectEntries() { it.split('\t') }
+        }
+        mouse_vep_species = mouse_cache_info.map { it['species'] }
+        mouse_vep_assembly = mouse_cache_info.map { it['assembly'] }
+    }
 
 
     // STEP 7 - Call and annotate germline variants
@@ -241,9 +254,10 @@ workflow {
         human_germline_annotation(
             subset_human_germline_variants.out,
             indexed_ref_fasta,
-            human_vep_cache,
+            human_vep_cache.cache_dir,
             human_chrom_synonyms,
-            'homo_sapiens',
+            human_vep_species,
+            human_vep_assembly,
         )
 
         // mouse
@@ -256,9 +270,10 @@ workflow {
         mouse_germline_annotation(
             subset_mouse_germline_variants.out,
             indexed_ref_fasta,
-            mouse_vep_cache,
+            mouse_vep_cache.cache_dir,
             mouse_chrom_synonyms,
-            'mus_musculus',
+            mouse_vep_species,
+            mouse_vep_assembly,
         )
     }
 
@@ -316,9 +331,10 @@ workflow {
         human_somatic_annotation(
             subset_human_somatic_variants.out,
             indexed_ref_fasta,
-            human_vep_cache,
+            human_vep_cache.cache_dir,
             human_chrom_synonyms,
-            'homo_sapiens',
+            human_vep_species,
+            human_vep_assembly,
         )
 
         // mouse
@@ -331,9 +347,10 @@ workflow {
         mouse_somatic_annotation(
             subset_mouse_somatic_variants.out,
             indexed_ref_fasta,
-            mouse_vep_cache,
+            mouse_vep_cache.cache_dir,
             mouse_chrom_synonyms,
-            'mus_musculus',
+            mouse_vep_species,
+            mouse_vep_assembly,
         )
     }
 

@@ -37,6 +37,7 @@ workflow ensembl_vep {
     vep_cache
     chrom_synonyms
     species
+    assembly
 
 
     main:
@@ -48,6 +49,7 @@ workflow ensembl_vep {
         vep_cache,
         chrom_synonyms,
         species,
+        assembly,
     )
 
 
