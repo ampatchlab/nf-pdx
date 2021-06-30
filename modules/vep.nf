@@ -87,8 +87,8 @@ process vep {
     val assembly
 
     output:
-    path "${sample}.${species}.vep.vcf.gz{,.tbi}", emit: annotated_variants
-    path "${sample}.${species}.stats.html", emit: stats
+    path "${sample}.${assembly}.vep.vcf.gz{,.tbi}", emit: annotated_variants
+    path "${sample}.${assembly}.stats.html", emit: stats
 
     script:
     def vep_cache_type = params.vep_cache_type in ['merged', 'refseq']
@@ -108,9 +108,9 @@ process vep {
         --format vcf \\
         --vcf_info_field "${params.vcf_info_field}" \\
         --vcf \\
-        --output_file "${sample}.${species}.vep.vcf.gz" \\
-        --stats_file "${sample}.${species}.stats.html" \\
-        --warning_file "${sample}.${species}.warnings.txt" \\
+        --output_file "${sample}.${assembly}.vep.vcf.gz" \\
+        --stats_file "${sample}.${assembly}.stats.html" \\
+        --warning_file "${sample}.${assembly}.warnings.txt" \\
         --fork ${task.cpus - 1} \\
         --dir "${cache_dir}" \\
         ${vep_cache_type} \\
@@ -121,6 +121,6 @@ process vep {
         --allow_non_variant \\
         --buffer_size "${params.buffer_size}"
     tabix \\
-        "${sample}.${species}.vep.vcf.gz"
+        "${sample}.${assembly}.vep.vcf.gz"
     """
 }
