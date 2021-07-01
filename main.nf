@@ -51,6 +51,9 @@ include { bwa_index } from './modules/bwakit.nf' params( params )
 include { multiqc } from './modules/multiqc.nf' params( params )
 include { samtools_faidx } from './modules/samtools.nf' params( params )
 
+include { gunzip as gunzip_human_somatic_vcf } from './modules/gzip.nf' params( params )
+include { gunzip as gunzip_mouse_somatic_vcf } from './modules/gzip.nf' params( params )
+
 include { mosdepth as mosdepth_human } from './modules/mosdepth.nf' params( params )
 include { mosdepth as mosdepth_mouse } from './modules/mosdepth.nf' params( params )
 
@@ -64,6 +67,9 @@ include { bcftools_subset_regions as subset_mouse_somatic_variants } from './mod
 
 include { unpack_vep_cache as unpack_human_vep_cache } from './modules/vep.nf' params( params )
 include { unpack_vep_cache as unpack_mouse_vep_cache } from './modules/vep.nf' params( params )
+
+include { vcf2maf as human_vcf2maf } from './modules/vcf2maf.nf' params( params )
+include { vcf2maf as mouse_vcf2maf } from './modules/vcf2maf.nf' params( params )
 
 // workflows
 include { dna_alignment } from './workflows/alignment.nf' params( params )
@@ -337,6 +343,21 @@ workflow {
             human_vep_assembly,
         )
 
+        human_somatic_annotation.out.vep_vcf \
+            | map { vcf, tbi -> vcf } \
+            | gunzip_human_somatic_vcf \
+            | map { vcf -> tuple( vcf.getSimpleName(), vcf ) } \
+            | join( test_control_inputs ) \
+            | map { analysis, vcf, test, control -> tuple( vcf, test, control ) } \
+            | set { human_vcf2maf_inputs }
+
+        human_vcf2maf(
+            human_vcf2maf_inputs,
+            indexed_ref_fasta,
+            human_vep_species,
+            human_vep_assembly,
+        )
+
         // mouse
 
         subset_mouse_somatic_variants(
@@ -349,6 +370,21 @@ workflow {
             indexed_ref_fasta,
             mouse_vep_cache.cache_dir,
             mouse_chrom_synonyms,
+            mouse_vep_species,
+            mouse_vep_assembly,
+        )
+
+        mouse_somatic_annotation.out.vep_vcf \
+            | map { vcf, tbi -> vcf } \
+            | gunzip_mouse_somatic_vcf \
+            | map { vcf -> tuple( vcf.getSimpleName(), vcf ) } \
+            | join( test_control_inputs ) \
+            | map { analysis, vcf, test, control -> tuple( vcf, test, control ) } \
+            | set { mouse_vcf2maf_inputs }
+
+        mouse_vcf2maf(
+            mouse_vcf2maf_inputs,
+            indexed_ref_fasta,
             mouse_vep_species,
             mouse_vep_assembly,
         )
