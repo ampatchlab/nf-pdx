@@ -87,8 +87,8 @@ process vep {
     val assembly
 
     output:
-    path "${sample}.${assembly}.vep.vcf.gz{,.tbi}", emit: annotated_variants
-    path "${sample}.${assembly}.stats.html", emit: stats
+    path "${sample}.${assembly}.vep.vcf.gz{,.tbi}", emit: indexed_vcf
+    path "${sample}.${assembly}.stats.html", emit: stats_html
 
     script:
     def vep_cache_type = params.vep_cache_type in ['merged', 'refseq']
@@ -98,6 +98,8 @@ process vep {
     def synonyms = chrom_synonyms.name != 'null'
                  ? /--synonyms "${chrom_synonyms}"/
                  : ''
+
+    def pick_order = 'canonical,tsl,biotype,rank,ccds,length'
 
     """
     vep \\
@@ -119,7 +121,15 @@ process vep {
         ${synonyms} \\
         --compress_output bgzip \\
         --allow_non_variant \\
-        --buffer_size "${params.buffer_size}"
+        --buffer_size "${params.buffer_size}" \\
+        --check_existing \\
+        --total_length \\
+        --allele_number \\
+        --no_escape \\
+        --xref_refseq \\
+        --failed 1 \\
+        --flag_pick_allele \\
+        --pick_order "${pick_order}"
     tabix \\
         "${sample}.${assembly}.vep.vcf.gz"
     """

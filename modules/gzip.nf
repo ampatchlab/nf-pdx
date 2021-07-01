@@ -1,5 +1,3 @@
-#!/usr/bin/env nextflow
-
 /*
 vim: syntax=groovy
 -*- mode: groovy;-*-
@@ -23,46 +21,41 @@ vim: syntax=groovy
  */
 
 
-include { vep } from '../modules/vep.nf' params( params )
-include { vepvcf2tsv } from '../modules/pysam' params( params )
+/*
+ * Params
+ */
+
+params.publish_dir = './results'
+params.publish_everything = false
+params.publish_mode = 'copy'
+
+params.publish_gunzip = false
 
 
+/*
+ * Processes
+ */
 
-workflow ensembl_vep {
+process gunzip {
 
-    take:
+    tag { gzfile.name }
 
-    indexed_vcf_tuples
-    indexed_ref_fasta
-    vep_cache
-    chrom_synonyms
-    species
-    assembly
-
-
-    main:
-
-    // STEP 1 - Annotate the variants using VEP
-    vep(
-        indexed_vcf_tuples,
-        indexed_ref_fasta,
-        vep_cache,
-        chrom_synonyms,
-        species,
-        assembly,
+    publishDir(
+        path: "${params.publish_dir}/${task.process.replaceAll(':', '/')}",
+        enabled: params.publish_everything || params.publish_gunzip,
+        mode: params.publish_mode,
     )
 
+    input:
+    path gzfile
 
-    // STEP 2 - Convert the VEP VCF files to tab-separated values
-    vep.out.indexed_vcf \
-        | map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) } \
-        | vepvcf2tsv
+    output:
+    path "${gzfile.getBaseName()}"
 
+    when:
+    gzfile.getExtension() == "gz"
 
-    emit:
-
-    vep_vcf = vep.out.indexed_vcf
-
-    all_variants_tsv = vepvcf2tsv.out.all_variants
-    pass_variants_tsv = vepvcf2tsv.out.pass_variants
+    """
+    gzip -dc "${gzfile}" > "${gzfile.getBaseName()}"
+    """
 }
