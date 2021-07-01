@@ -68,7 +68,7 @@ process unpack_vep_cache {
 
 process vep {
 
-    tag { sample }
+    tag { "${sample}:${assembly}" }
 
     label 'ensembl_vep'
 
