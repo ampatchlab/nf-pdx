@@ -58,5 +58,8 @@ exclude_modules:
     - custom_content
 
 table_columns_visible:
+    FastQC (raw): False
+    Cutadapt: False
+    FastQC (trimmed): False
     Samtools:
         mapped_passed: False
