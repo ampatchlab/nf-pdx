@@ -59,6 +59,9 @@ exclude_modules:
 
 plots_force_interactive: True
 
+show_analysis_time: False
+show_analysis_paths: False
+
 table_columns_visible:
     FastQC (raw): False
     Cutadapt: False
