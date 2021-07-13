@@ -68,3 +68,6 @@ table_columns_visible:
     FastQC (trimmed): False
     Samtools:
         mapped_passed: False
+
+use_filename_as_sample_name:
+  - cutadapt
