@@ -57,6 +57,8 @@ run_modules:
 exclude_modules:
     - custom_content
 
+plots_force_interactive: True
+
 table_columns_visible:
     FastQC (raw): False
     Cutadapt: False
