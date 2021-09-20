@@ -35,15 +35,20 @@ params.publish_bcftools_mpileup = false
 params.publish_bcftools_concat = false
 
 params.mpileup_max_depth = 20000
-params.mpileup_min_bq = 13
+params.mpileup_min_mq = 0
+params.mpileup_min_bq = 1
 
 params.mpileup_exclude_filters = [
-  'LOW_QUAL': 'QUAL<10',
-  'LOW_DP': 'FORMAT/DP<10',
-  'LOW_GQ': 'FORMAT/GQ<15',
-  'VD_BIAS': 'INFO/VDB<=0.05', // variant distance
-  'RP_BIAS': 'INFO/RPB<=0.05', // read position
-  'BQ_BIAS': 'INFO/BQB<=0.05', // base quality
+  'LOW_QUAL': 'QUAL<10', // low quality
+
+  'LOW_DP': 'FORMAT/DP<10', // low number of high quality bases
+  'LOW_GQ': 'FORMAT/GQ<15', // low genotype quality
+
+  'BQ_BIAS': 'ABS(INFO/BQBZ)>5', // base quality bias
+  'MQ_BIAS': 'ABS(INFO/MQBZ)>10', // mapping quality bias
+  'MQS_BIAS': 'ABS(INFO/MQSBZ)>5', // mapping quality vs strand bias
+  'RP_BIAS': 'ABS(INFO/RPBZ)>5', // read position bias
+  'SC_BIAS': 'ABS(INFO/SCBZ)>5', // soft-clip length bias
 ]
 
 params.mpileup_include_filters = null
@@ -157,6 +162,7 @@ process bcftools_mpileup {
         -Ou \\
         -d "${params.mpileup_max_depth}" \\
         -f "${indexed_fasta.first()}" \\
+        -q "${params.mpileup_min_mq}" \\
         -Q "${params.mpileup_min_bq}" \\
         -R "${bed}" \\
         -a "${info_fields.join(',')},${format_fields.join(',')}" \\
@@ -172,7 +178,7 @@ process bcftools_mpileup {
         -Ou \\
         -m \\
         -v \\
-        -f GQ,GP \\
+        -a GQ,GP \\
         - |
     bcftools norm \\
         --no-version \\
