@@ -239,6 +239,23 @@ process bcftools_call {
         """.stripIndent().replaceAll(/(?m)^/, ' '*4)
     }
 
+    def tags = [
+        'AN',
+        'AC',
+        'NS',
+        'AC_Hom',
+        'AC_Het',
+        'AC_Hemi',
+        'AF',
+        'MAF',
+        'HWE',
+        'ExcHet',
+        'VAF',
+        'VAF1',
+        'END',
+        'TYPE',
+    ]
+
     def vcf_list = indexed_vcf_files
         .findAll { infile ->
             [ '.bcf', '.bcf.gz', '.vcf', '.vcf.gz' ].any { infile.name.endsWith(it) }
@@ -304,6 +321,19 @@ process bcftools_call {
         --variants-only \\
         --annotate GQ,GP \\
         "\${input}"
+
+
+    >&2 echo "Filling all available tags..."
+    input="\${output}"
+    output="${sample}.fill-tags.bcf.gz"
+
+    bcftools +fill-tags \\
+        --no-version \\
+        --output "\${output}" \\
+        --output-type b \\
+        "\${input}" \\
+        -- \\
+        -t "${tags.join(',')}"
 
 
     >&2 echo "Splitting multiallelic sites into biallelic records..."
