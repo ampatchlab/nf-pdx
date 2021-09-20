@@ -35,9 +35,22 @@ params.publish_bcftools_mpileup = false
 params.publish_bcftools_call = false
 params.publish_bcftools_concat = false
 
-params.mpileup_max_depth = 20000
+// mpileup input options
+params.mpileup_max_depth = 250
 params.mpileup_min_mq = 0
 params.mpileup_min_bq = 1
+
+// mpileup genotype likelihoods options
+params.mpileup_ext_prob = 20
+params.mpileup_gap_frac = 0.05
+params.mpileup_tandem_qual = 500
+params.mpileup_skip_indels = false
+params.mpileup_max_idepth = 250
+params.mpileup_min_ireads = 2
+params.mpileup_max_read_len = 500
+params.mpileup_open_prob = 40
+params.mpileup_per_sample_mF = false
+params.mpileup_indel_bias = 1.00
 
 params.exclude_filters = [
   'LOW_QUAL': 'QUAL<10', // low quality
@@ -80,12 +93,12 @@ process bcftools_subset_pass {
     """
     bcftools view \\
         --no-version \\
-        -f PASS \\
-        -o "${sample}.pass.vcf.gz" \\
-        -Oz \\
+        --output "${sample}.pass.vcf.gz" \\
+        --output-type z \\
+        --apply-filters PASS \\
         "${indexed_vcf.first()}"
     bcftools index \\
-        -t \\
+        --tbi \\
         "${sample}.pass.vcf.gz"
     """
 }
@@ -112,12 +125,12 @@ process bcftools_subset_regions {
     """
     bcftools view \\
         --no-version \\
-        -R "${bed}" \\
-        -o "${sample}.${bed.baseName}.vcf.gz" \\
-        -Oz \\
+        --output "${sample}.${bed.baseName}.vcf.gz" \\
+        --output-type z \\
+        --regions-file "${bed}" \\
         "${indexed_vcf.first()}"
     bcftools index \\
-        -t \\
+        --tbi \\
         "${sample}.${bed.baseName}.vcf.gz"
     """
 }
@@ -154,17 +167,27 @@ process bcftools_mpileup {
 
     bcftools mpileup \\
         --no-version \\
-        -o "${bed.baseName}.bcf.gz" \\
-        -Ob \\
-        -d "${params.mpileup_max_depth}" \\
-        -f "${indexed_fasta.first()}" \\
-        -q "${params.mpileup_min_mq}" \\
-        -Q "${params.mpileup_min_bq}" \\
-        -R "${bed}" \\
-        -a "${info_fields.join(',')},${format_fields.join(',')}" \\
-        -b "${sample}.list"
+        --output "${bed.baseName}.bcf.gz" \\
+        --output-type b \\
+        --max-depth "${params.mpileup_max_depth}" \\
+        --fasta-ref "${indexed_fasta.first()}" \\
+        --min-MQ "${params.mpileup_min_mq}" \\
+        --min-BQ "${params.mpileup_min_bq}" \\
+        --regions-file "${bed}" \\
+        --annotate "${info_fields.join(',')},${format_fields.join(',')}" \\
+        --bam-list "${sample}.list" \\
+        --ext-prob "${params.mpileup_ext_prob}" \\
+        --gap-frac "${params.mpileup_gap_frac}" \\
+        --tandem-qual "${params.mpileup_tandem_qual}" \\
+        ${params.mpileup_skip_indels ? '--skip-indels' : ''} \\
+        --max-idepth "${params.mpileup_max_idepth}" \\
+        --min-ireads "${params.mpileup_min_ireads}" \\
+        --max-read-len "${params.mpileup_max_read_len}" \\
+        --open-prob "${params.mpileup_open_prob}" \\
+        ${params.mpileup_per_sample_mF ? '--per-sample-mF' : ''} \\
+        --indel-bias "${params.mpileup_indel_bias}"
     bcftools index \\
-        -c \\
+        --csi \\
         "${bed.baseName}.bcf.gz"
     """
 }
@@ -189,7 +212,7 @@ process bcftools_call {
     tuple val(sample), path("${sample}.vcf.gz{,.tbi}")
 
     script:
-    def avail_mem = task.memory ? "-m ${task.memory.toGiga()}G" : ''
+    def avail_mem = task.memory ? "--max-mem ${task.memory.toGiga()}G" : ''
 
     def exclude_filters = params.exclude_filters.collect { name, expr ->
 
@@ -200,11 +223,11 @@ process bcftools_call {
 
         bcftools filter \\
             --no-version \\
-            -o "\${output}" \\
-            -Ob \\
-            -m+ \\
-            -s '${name}' \\
-            -e '${expr}' \\
+            --output "\${output}" \\
+            --output-type b \\
+            --mode + \\
+            --soft-filter '${name}' \\
+            --exclude '${expr}' \\
             "\${input}"
         """.stripIndent().replaceAll(/(?m)^/, ' '*4)
     }
@@ -218,11 +241,11 @@ process bcftools_call {
 
         bcftools filter \\
             --no-version \\
-            -o "\${output}" \\
-            -Ob \\
-            -m+ \\
-            -s '${name}' \\
-            -i '${expr}' \\
+            --output "\${output}" \\
+            --output-type b \\
+            --mode + \\
+            --soft-filter '${name}' \\
+            --include '${expr}' \\
             "\${input}"
         """.stripIndent().replaceAll(/(?m)^/, ' '*4)
     }
@@ -248,11 +271,11 @@ process bcftools_call {
 
     bcftools concat \\
         --no-version \\
-        -o "\${output}" \\
-        -Ob \\
-        -a \\
-        -D \\
-        -f "\${input}"
+        --output "\${output}" \\
+        --output-type b \\
+        --allow-overlaps \\
+        --remove-duplicates \\
+        --file-list "\${input}"
 
 
     >&2 echo "Sorting variants..."
@@ -261,9 +284,9 @@ process bcftools_call {
 
     bcftools sort \\
         ${avail_mem} \\
-        -o "\${output}" \\
-        -Ob \\
-        -T . \\
+        --output "\${output}" \\
+        --output-type b \\
+        --temp-dir . \\
         "\${input}"
 
 
@@ -273,10 +296,10 @@ process bcftools_call {
 
     bcftools norm \\
         --no-version \\
-        -o "\${output}" \\
-        -Ob \\
-        -f "${indexed_fasta.first()}" \\
-        -m +any \\
+        --output "\${output}" \\
+        --output-type b \\
+        --fasta-ref "${indexed_fasta.first()}" \\
+        --multiallelics +any \\
         "\${input}"
 
 
@@ -286,11 +309,11 @@ process bcftools_call {
 
     bcftools call \\
         --no-version \\
-        -o "\${output}" \\
-        -Ob \\
-        -m \\
-        -v \\
-        -a GQ,GP \\
+        --output "\${output}" \\
+        --output-type b \\
+        --multiallelic-caller \\
+        --variants-only \\
+        --annotate GQ,GP \\
         "\${input}"
 
 
@@ -300,10 +323,10 @@ process bcftools_call {
 
     bcftools norm \\
         --no-version \\
-        -o "\${output}" \\
-        -Ob \\
-        -f "${indexed_fasta.first()}" \\
-        -m -any \\
+        --output "\${output}" \\
+        --output-type b \\
+        --fasta-ref "${indexed_fasta.first()}" \\
+        --multiallelics -any \\
         "\${input}"
 
 
@@ -319,11 +342,11 @@ process bcftools_call {
 
     bcftools view \\
         --no-version \\
-        -Oz \\
-        -o "\${output}" \\
+        --output "\${output}" \\
+        --output-type z \\
         "\${input}"
     bcftools index \\
-        -t \\
+        --tbi \\
         "\${output}"
     """
 }
@@ -347,7 +370,7 @@ process bcftools_concat {
     tuple val(sample), path("${sample}.sorted.vcf.gz{,.tbi}")
 
     script:
-    def avail_mem = task.memory ? "-m ${task.memory.toGiga()}G" : ''
+    def avail_mem = task.memory ? "--max-mem ${task.memory.toGiga()}G" : ''
 
     def vcf_list = indexed_vcf_files
         .findAll { infile ->
@@ -362,19 +385,19 @@ process bcftools_concat {
 
     bcftools concat \\
         --no-version \\
-        -o "${sample}.bcf.gz" \\
-        -Ob \\
-        -a \\
-        -D \\
-        -f "${sample}.list"
+        --output "${sample}.bcf.gz" \\
+        --output-type b \\
+        --allow-overlaps \\
+        --remove-duplicates \\
+        --file-list "${sample}.list"
     bcftools sort \\
         ${avail_mem} \\
-        -Oz \\
-        -o "${sample}.sorted.vcf.gz" \\
-        -T . \\
+        --output "${sample}.sorted.vcf.gz" \\
+        --output-type z \\
+        --temp-dir . \\
         "${sample}.bcf.gz"
     bcftools index \\
-        -t \\
+        --tbi \\
         "${sample}.sorted.vcf.gz"
     """
 }
