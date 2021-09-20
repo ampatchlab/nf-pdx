@@ -98,8 +98,7 @@ process vepvcf2tsv {
             if meta_line.group('key') == 'FORMAT':
                 format_cols.append(meta['ID'])
 
-    #headers = re.match('^#(.*)', header_line).group(1).split('\\t')
-    headers = header_line.split('\\t')
+    headers = re.match('^#(.*)', header_line).group(1).split('\\t')
     mandatory_header_cols, remaining_header_cols = headers[:8], headers[8:]
 
     if remaining_header_cols:
@@ -124,29 +123,28 @@ process vepvcf2tsv {
 
         for row in (dict(zip(headers, r)) for r in tabix.fetch()):
             result_dict = { c: row[c] for c in mandatory_header_cols[:-1] }
+            csq_list = []
+            for rec in row['INFO'].split(';'):
+                key, sep, value = rec.partition('=')
+                if key == '${params.vcf_info_field}':
+                    for r in value.split(','):
+                        csq_list.append({ k: v.replace('&', ',') for k, v in zip(csq_cols, r.split('|')) })
+                else:
+                    result_dict['/'.join(['INFO', key])] = value if sep else True
 
             for sample in remaining_header_cols:
-                for k, v in zip(['/'.join([sample, x]) for x in row['FORMAT'].split(':')], row[sample].split(':')):
+                key_list = ['/'.join([sample, x]) for x in row['FORMAT'].split(':')]
+                for k, v in zip(key_list, row[sample].split(':')):
                     result_dict[k] = v
 
-            info_fields = dict(r.split('=', 1) for r in row['INFO'].split(';'))
-            csq_fields = info_fields.pop('${params.vcf_info_field}', None)
-
-            for k, v in info_fields.items():
-                result_dict['/'.join(['INFO', k])] = v
-
-            if csq_fields is not None:
-                for csq_rec in csq_fields.split(','):
-                    csq_dict = { k: v.replace('&', ',') for k, v in zip(csq_cols, csq_rec.split('|')) }
-                    all_tsv_writer.writerow({**result_dict, **csq_dict})
-                    if row['FILTER'] == 'PASS':
-                        pass_tsv_writer.writerow({**result_dict, **csq_dict})
-            else:
-                all_tsv_writer.writerow(result_dict)
+            for csq_dict in csq_list or [{}]:
+                all_tsv_writer.writerow({**result_dict, **csq_dict})
                 if row['FILTER'] == 'PASS':
-                    pass_tsv_writer.writerow(result_dict)
+                    pass_tsv_writer.writerow({**result_dict, **csq_dict})
 
-    pysam.tabix_index(all_tsv, seq_col=0, start_col=1, end_col=1, line_skip=1)
-    pysam.tabix_index(pass_tsv, seq_col=0, start_col=1, end_col=1, line_skip=1)
+    index_kwargs = { 'seq_col': 0, 'start_col': 1, 'end_col': 1, 'line_skip': 1 }
+
+    pysam.tabix_index(all_tsv, **index_kwargs)
+    pysam.tabix_index(pass_tsv, **index_kwargs)
     """
 }
