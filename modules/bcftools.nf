@@ -52,19 +52,8 @@ params.mpileup_open_prob = 40
 params.mpileup_per_sample_mF = false
 params.mpileup_indel_bias = 1.00
 
-params.exclude_filters = [
-  'LOW_QUAL': 'QUAL<10', // low quality
-
-  'LOW_DP': 'FORMAT/DP<10', // low number of high quality bases
-  'LOW_GQ': 'FORMAT/GQ<15', // low genotype quality
-
-  'BQ_BIAS': 'ABS(INFO/BQBZ)>5', // base quality bias
-  'MQ_BIAS': 'ABS(INFO/MQBZ)>10', // mapping quality bias
-  'MQS_BIAS': 'ABS(INFO/MQSBZ)>5', // mapping quality vs strand bias
-  'RP_BIAS': 'ABS(INFO/RPBZ)>5', // read position bias
-  'SC_BIAS': 'ABS(INFO/SCBZ)>5', // soft-clip length bias
-]
-
+// variant calling filters
+params.exclude_filters = null
 params.include_filters = null
 
 
