@@ -75,7 +75,7 @@ process bcftools_subset_pass {
     tuple val(sample), path(indexed_vcf)
 
     output:
-    path "${sample}.pass.vcf.gz{,.tbi}"
+    tuple val(sample), path("${sample}.pass.vcf.gz{,.tbi}")
 
     """
     bcftools view \\
@@ -344,7 +344,7 @@ process bcftools_concat {
     tuple val(sample), path(indexed_vcf_files)
 
     output:
-    path "${sample}.sorted.vcf.gz{,.tbi}"
+    tuple val(sample), path("${sample}.sorted.vcf.gz{,.tbi}")
 
     script:
     def avail_mem = task.memory ? "-m ${task.memory.toGiga()}G" : ''

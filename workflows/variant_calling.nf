@@ -57,9 +57,7 @@ workflow germline_variant_calling {
 
     emit:
 
-    bcftools_subset_pass.out.map { vcf, tbi ->
-        tuple( vcf.getBaseName(3), tuple( vcf, tbi ) )
-    }
+    bcftools_subset_pass.out
 }
 
 
@@ -115,13 +113,10 @@ workflow somatic_variant_calling {
             tuple( analysis_id, [indexed_snvs_vcf, indexed_indels_vcf].flatten() )
         } \
         | vcf_concat \
-        | map { vcf, tbi -> tuple( vcf.getBaseName(3), tuple( vcf, tbi ) ) } \
         | bcftools_subset_pass
 
 
     emit:
 
-    bcftools_subset_pass.out.map { vcf, tbi ->
-        tuple( vcf.getBaseName(3), tuple( vcf, tbi ) )
-    }
+    bcftools_subset_pass.out
 }
