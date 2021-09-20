@@ -115,8 +115,8 @@ workflow somatic_variant_calling {
             tuple( analysis_id, [indexed_snvs_vcf, indexed_indels_vcf].flatten() )
         } \
         | vcf_concat \
-        | map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) } \
-        | bcftools_subset_pass \
+        | map { vcf, tbi -> tuple( vcf.getBaseName(3), tuple( vcf, tbi ) ) } \
+        | bcftools_subset_pass
 
 
     emit:

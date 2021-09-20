@@ -23,8 +23,7 @@ vim: syntax=groovy
  */
 
 
-include { bcftools_concat } from '../modules/bcftools.nf' params( params )
-include { bcftools_subset_pass } from '../modules/bcftools.nf' params( params )
+include { bcftools_call } from '../modules/bcftools.nf' params( params )
 include { bcftools_mpileup } from '../modules/bcftools.nf' params( params )
 include { bedops_convert2bed } from '../modules/bedops.nf' params( params )
 include { split_regions } from '../modules/coreutils.nf' params( params )
@@ -42,7 +41,7 @@ workflow mpileup {
 
     main:
 
-    // STEP 1 - Chunkify variants in BED format
+    // STEP 1 - Chunkify variants in BED format, and create the mpileup inputs
     bedops_convert2bed( vcf_inputs ) \
         | map { bed -> tuple( bed.getBaseName(2), bed ) } \
         | split_regions \
@@ -57,14 +56,18 @@ workflow mpileup {
         | set { mpileup_inputs }
 
 
-    // STEP 2 - Pileup and re-call each chunk of variant positions
+    // STEP 2 - Pileup each chunk of variant positions, and group by sample
     bcftools_mpileup( mpileup_inputs, indexed_ref_fasta ) \
         | groupTuple() \
-        | map { sample, vcf_tuples -> tuple( sample.toString(), vcf_tuples.flatten() ) } \
-        | bcftools_concat
+        | map { sample, bcf_tuples -> tuple( sample.toString(), bcf_tuples.flatten() ) } \
+        | set { call_inputs }
+
+
+    // STEP 3 - Call variants
+    bcftools_call( call_inputs, indexed_ref_fasta )
 
 
     emit:
 
-    bcftools_concat.out.map { vcf, tbi -> tuple( vcf.getBaseName(2), tuple( vcf, tbi ) ) }
+    bcftools_call.out
 }
